@@ -1,11 +1,17 @@
 package com.xhl.aicodegenerate.ai;
 
+import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
+import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * AI 代码生成服务工厂。
@@ -23,17 +29,41 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AiCodeGeneratorServiceFactory {
 
+    private static final int CHAT_MEMORY_MAX_MESSAGES = 20;
+
     @Resource
     private ChatModel chatModel;
 
     @Resource
     private StreamingChatModel streamingChatModel;
 
+    @Resource
+    private RedisChatMemoryStore redisChatMemoryStore;
+
+    @Resource
+    private ChatHistoryMapper chatHistoryMapper;
+
     @Bean
-    public AiCodeGeneratorService aiCodeGeneratorService() {
+    @Primary
+    public ChatMemoryStore chatMemoryStore() {
+        return new DatabaseLoadingChatMemoryStore(redisChatMemoryStore, chatHistoryMapper);
+    }
+
+    @Bean
+    public ChatMemoryProvider chatMemoryProvider(ChatMemoryStore chatMemoryStore) {
+        return memoryId -> MessageWindowChatMemory.builder()
+                .id(memoryId)
+                .maxMessages(CHAT_MEMORY_MAX_MESSAGES)
+                .chatMemoryStore(chatMemoryStore)
+                .build();
+    }
+
+    @Bean
+    public AiCodeGeneratorService aiCodeGeneratorService(ChatMemoryProvider chatMemoryProvider) {
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)
+                .chatMemoryProvider(chatMemoryProvider)
                 .build();
     }
 

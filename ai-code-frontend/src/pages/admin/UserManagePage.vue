@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { deleteUser, listUserVOByPage, updateUser } from '@/api/userController'
+import { deleteUser, listUserVoByPage, updateUser } from '@/api/userController'
+import { getUserAvatar } from '@/constants/user'
 
 const columns = [
   {
@@ -108,7 +109,7 @@ const getRoleText = (role?: string) => {
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await listUserVOByPage({ ...searchParams })
+    const res = await listUserVoByPage({ ...searchParams })
     if (res.data.code === 0 && res.data.data) {
       dataList.value = res.data.data.records || []
       total.value = res.data.data.totalRow || 0
@@ -214,8 +215,7 @@ onMounted(() => {
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'userAvatar'">
-          <a-avatar v-if="record.userAvatar" :src="record.userAvatar" />
-          <a-avatar v-else>{{ record.userName?.slice(0, 1) || record.userAccount?.slice(0, 1) || 'U' }}</a-avatar>
+          <a-avatar :src="getUserAvatar(record.userAvatar)" />
         </template>
         <template v-else-if="column.dataIndex === 'userRole'">
           <a-tag :color="getRoleColor(record.userRole)">
@@ -252,7 +252,11 @@ onMounted(() => {
           <a-input v-model:value="editForm.userName" placeholder="请输入昵称" allow-clear />
         </a-form-item>
         <a-form-item label="头像地址" name="userAvatar">
-          <a-input v-model:value="editForm.userAvatar" placeholder="请输入头像地址" allow-clear />
+          <a-input
+            v-model:value="editForm.userAvatar"
+            placeholder="不填写时使用默认西高地小狗头像"
+            allow-clear
+          />
         </a-form-item>
         <a-form-item label="简介" name="userProfile">
           <a-textarea

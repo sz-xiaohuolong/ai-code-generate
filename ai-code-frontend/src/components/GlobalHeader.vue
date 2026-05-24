@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { userLogout } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
+import { getUserAvatar } from '@/constants/user'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -14,11 +15,13 @@ const { loginUser, isLogin } = storeToRefs(loginUserStore)
 const menuItems = computed(() => {
   const items = [
     { key: '/', title: '首页' },
-    { key: '/about', title: '关于' },
   ]
   if (loginUser.value.userRole === 'admin') {
     items.push({ key: '/admin/userManage', title: '用户管理' })
+    items.push({ key: '/admin/appManage', title: '应用管理' })
+    items.push({ key: '/admin/chatHistoryManage', title: '对话管理' })
   }
+  items.push({ key: '/about', title: '关于' })
   return items
 })
 
@@ -40,10 +43,6 @@ const handleMenuClick = ({ key }: { key: string }) => {
 
 const displayName = computed(() => {
   return loginUser.value.userName || loginUser.value.userAccount || '用户'
-})
-
-const avatarText = computed(() => {
-  return displayName.value.slice(0, 1).toUpperCase()
 })
 
 const goLogin = () => {
@@ -89,8 +88,7 @@ const handleLogout = async () => {
       <a-button v-if="!isLogin" type="primary" @click="goLogin">登录</a-button>
       <a-dropdown v-else placement="bottomRight">
         <div class="user-entry">
-          <a-avatar v-if="loginUser.userAvatar" :src="loginUser.userAvatar" />
-          <a-avatar v-else>{{ avatarText }}</a-avatar>
+          <a-avatar :src="getUserAvatar(loginUser.userAvatar)" />
           <span class="user-name">{{ displayName }}</span>
         </div>
         <template #overlay>

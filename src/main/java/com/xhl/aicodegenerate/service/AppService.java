@@ -3,8 +3,10 @@ package com.xhl.aicodegenerate.service;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.xhl.aicodegenerate.entity.App;
+import com.xhl.aicodegenerate.entity.User;
 import com.xhl.aicodegenerate.model.dto.app.AppQueryRequest;
 import com.xhl.aicodegenerate.model.vo.AppVO;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -46,4 +48,25 @@ public interface AppService extends IService<App> {
      * @return 应用脱敏列表
      */
     List<AppVO> getAppVOList(List<App> appList);
+
+    /**
+     * 聊天生成代码
+     *
+     * @param appId 应用ID
+     * @param message 用户消息
+     * @param loginUser 登录用户
+     * @return 生成的代码
+     */
+    Flux<String> chatToGenCode(Long appId, String message, User loginUser);
+
+    /**
+     * 删除应用及其对话历史。
+     *
+     * @param appId 应用 id
+     * @return 是否成功
+     */
+    boolean deleteApp(Long appId);
+
+    // 部署应用
+    String deployApp(Long appId, User loginUser);
 }

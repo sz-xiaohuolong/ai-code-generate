@@ -5,6 +5,7 @@ import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 import { updateMyUser } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
+import { getUserAvatar } from '@/constants/user'
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -56,10 +57,7 @@ onMounted(async () => {
     <div class="settings-panel">
       <h1 class="page-title">个人设置</h1>
       <div class="profile-preview">
-        <a-avatar v-if="formState.userAvatar" :src="formState.userAvatar" :size="64" />
-        <a-avatar v-else :size="64">
-          {{ (formState.userName || loginUser.userAccount || 'U').slice(0, 1) }}
-        </a-avatar>
+        <a-avatar :src="getUserAvatar(formState.userAvatar)" :size="64" />
         <div class="profile-meta">
           <div class="profile-name">{{ formState.userName || loginUser.userAccount || '用户' }}</div>
           <div class="profile-account">{{ loginUser.userAccount }}</div>
@@ -75,7 +73,11 @@ onMounted(async () => {
           <a-input v-model:value="formState.userName" placeholder="请输入昵称" allow-clear />
         </a-form-item>
         <a-form-item label="头像地址" name="userAvatar">
-          <a-input v-model:value="formState.userAvatar" placeholder="请输入头像地址" allow-clear />
+          <a-input
+            v-model:value="formState.userAvatar"
+            placeholder="不填写时使用默认西高地小狗头像"
+            allow-clear
+          />
         </a-form-item>
         <a-form-item label="个人简介" name="userProfile">
           <a-textarea

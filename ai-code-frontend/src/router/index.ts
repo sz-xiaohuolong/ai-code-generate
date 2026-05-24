@@ -30,9 +30,41 @@ const router = createRouter({
       },
     },
     {
+      path: '/app/chat/:id',
+      name: 'appChat',
+      component: () => import('../pages/app/AppChatPage.vue'),
+      meta: {
+        access: 'login',
+      },
+    },
+    {
+      path: '/app/edit/:id',
+      name: 'appEdit',
+      component: () => import('../pages/app/AppEditPage.vue'),
+      meta: {
+        access: 'login',
+      },
+    },
+    {
       path: '/admin/userManage',
       name: 'userManage',
       component: () => import('../pages/admin/UserManagePage.vue'),
+      meta: {
+        access: 'admin',
+      },
+    },
+    {
+      path: '/admin/appManage',
+      name: 'appManage',
+      component: () => import('../pages/admin/AppManagePage.vue'),
+      meta: {
+        access: 'admin',
+      },
+    },
+    {
+      path: '/admin/chatHistoryManage',
+      name: 'chatHistoryManage',
+      component: () => import('../pages/admin/ChatHistoryManagePage.vue'),
       meta: {
         access: 'admin',
       },
@@ -66,6 +98,10 @@ router.beforeEach(async (to) => {
         redirect: to.fullPath,
       },
     }
+  }
+
+  if (access === 'login') {
+    return true
   }
 
   if (loginUserStore.loginUser.userRole !== 'admin') {

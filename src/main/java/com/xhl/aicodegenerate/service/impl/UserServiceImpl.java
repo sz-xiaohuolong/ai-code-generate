@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static com.xhl.aicodegenerate.constant.UserConstant.DEFAULT_USER_AVATAR;
 import static com.xhl.aicodegenerate.constant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -61,6 +62,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setUserAccount(userAccount);
         user.setUserPassword(encryptPassword);
         user.setUserName("无名");
+        user.setUserAvatar(DEFAULT_USER_AVATAR);
         user.setUserRole(UserRoleEnum.USER.getValue());
         boolean saveResult = this.save(user);
         if (!saveResult) {
@@ -76,6 +78,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         LoginUserVO loginUserVO = new LoginUserVO();
         BeanUtil.copyProperties(user, loginUserVO);
+        if (StrUtil.isBlank(loginUserVO.getUserAvatar())) {
+            loginUserVO.setUserAvatar(DEFAULT_USER_AVATAR);
+        }
         return loginUserVO;
     }
 
@@ -144,6 +149,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         UserVO userVO = new UserVO();
         BeanUtil.copyProperties(user, userVO);
+        if (StrUtil.isBlank(userVO.getUserAvatar())) {
+            userVO.setUserAvatar(DEFAULT_USER_AVATAR);
+        }
         return userVO;
     }
 

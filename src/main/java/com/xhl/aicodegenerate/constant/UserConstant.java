@@ -7,6 +7,11 @@ public interface UserConstant {
      */
     String USER_LOGIN_STATE = "user_login";
 
+    /**
+     * 默认用户头像：西高地白梗
+     */
+    String DEFAULT_USER_AVATAR = "https://upload.wikimedia.org/wikipedia/commons/b/bf/West-highland-white-terrier-dog.jpg";
+
     //  region 权限
 
     /**
