@@ -3,6 +3,9 @@ spring:
     name: ai-code-generate
   profiles:
     active: local
+  session:
+    store-type: redis
+    timeout: 2592000
   # mysql
   datasource:
       driver-class-name: com.mysql.cj.jdbc.Driver
@@ -14,15 +17,15 @@ spring:
     redis:
       host: localhost
       port: 6379
-      ttl: 3600
+      # AI 对话记忆 Redis 过期时间，单位秒；0 表示永不过期
+      ttl: 0
 server:
   port: 8123
   servlet:
     context-path: /api
     session:
-      timeout: 7d
       cookie:
-        max-age: 7d
+        max-age: 2592000
 
 
 # springdoc-openapi

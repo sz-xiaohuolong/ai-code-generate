@@ -1,5 +1,6 @@
 package com.xhl.aicodegenerate.config;
 
+import cn.hutool.core.util.StrUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -17,15 +18,21 @@ public class RedisChatMemoryStoreConfig {
 
     private String password;
 
-    private long ttl;
+    /**
+     * 对话记忆在 Redis 中的过期时间，单位秒。
+     * 0 表示永不过期，避免后端重启后因 key 过期导致记忆丢失。
+     */
+    private long ttl = 0;
 
     @Bean
     public RedisChatMemoryStore redisChatMemoryStore() {
-        return RedisChatMemoryStore.builder()
+        RedisChatMemoryStore.Builder builder = RedisChatMemoryStore.builder()
                 .host(host)
                 .port(port)
-                .password(password)
-                .ttl(ttl)
-                .build();
+                .ttl(ttl);
+        if (StrUtil.isNotBlank(password)) {
+            builder.password(password);
+        }
+        return builder.build();
     }
 }
