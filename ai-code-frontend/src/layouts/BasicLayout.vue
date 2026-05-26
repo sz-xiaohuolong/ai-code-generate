@@ -1,12 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import GlobalHeader from '@/components/GlobalHeader.vue'
 import GlobalFooter from '@/components/GlobalFooter.vue'
+
+const route = useRoute()
+const isHomePage = computed(() => route.path === '/')
 </script>
 
 <template>
-  <a-layout class="basic-layout">
-    <a-layout-header class="layout-header">
-      <GlobalHeader />
+  <a-layout class="basic-layout" :class="{ 'home-layout': isHomePage }">
+    <a-layout-header class="layout-header" :class="{ 'home-header': isHomePage }">
+      <GlobalHeader :home-mode="isHomePage" />
     </a-layout-header>
     <a-layout-content class="layout-content">
       <div class="content-wrapper">
@@ -35,10 +40,22 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   z-index: 100;
 }
 
+.home-layout .layout-header {
+  position: absolute;
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+}
+
 .layout-content {
   padding: 24px;
   background: #f0f2f5;
   min-height: calc(100vh - 64px - 72px);
+}
+
+.home-layout .layout-content {
+  padding: 0;
+  background: transparent;
 }
 
 .content-wrapper {
@@ -46,9 +63,18 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   margin: 0 auto;
 }
 
+.home-layout .content-wrapper {
+  max-width: none;
+  padding: 0;
+}
+
 .layout-footer {
   background: #f0f2f5;
   padding: 0;
+}
+
+.home-layout .layout-footer {
+  background: #e8f4ff;
 }
 
 /* 响应式适配 */

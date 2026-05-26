@@ -17,13 +17,13 @@ class AiCodeGeneratorServiceTest {
 
     @Test
     void generateHtmlCode() {
-        HtmlCodeResult htmlCodeResult = aiCodeGeneratorService.generateHtmlCode(1L, "做个小火龙的工作记录小工具，不超过20行代码");
+        HtmlCodeResult htmlCodeResult = aiCodeGeneratorService.generateHtmlCode(new AppChatMemoryId(1L, 1L), "做个小火龙的工作记录小工具，不超过20行代码");
         Assertions.assertNotNull(htmlCodeResult);
     }
 
     @Test
     void generateMultiFileCode() {
-        MultiFileCodeResult multiFileCodeResult = aiCodeGeneratorService.generateMultiFileCode(1L, "做个小火龙的留言板，不超过50行代码");
+        MultiFileCodeResult multiFileCodeResult = aiCodeGeneratorService.generateMultiFileCode(new AppChatMemoryId(1L, 1L), "做个小火龙的留言板，不超过50行代码");
         Assertions.assertNotNull(multiFileCodeResult);
     }
 }

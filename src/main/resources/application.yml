@@ -18,7 +18,7 @@ spring:
       host: localhost
       port: 6379
       # AI 对话记忆 Redis 过期时间，单位秒；0 表示永不过期
-      ttl: 0
+      ttl: 2592000
 server:
   port: 8123
   servlet:

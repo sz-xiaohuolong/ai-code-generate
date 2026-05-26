@@ -7,6 +7,10 @@ import { userLogout } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getUserAvatar } from '@/constants/user'
 
+defineProps<{
+  homeMode?: boolean
+}>()
+
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const { loginUser, isLogin } = storeToRefs(loginUserStore)
@@ -67,7 +71,7 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div class="global-header">
+  <div class="global-header" :class="{ 'home-mode': homeMode }">
     <div class="header-left">
       <div class="logo-wrapper">
         <img src="@/assets/logo.svg" alt="logo" class="logo" />
@@ -110,8 +114,15 @@ const handleLogout = async () => {
   justify-content: space-between;
   align-items: center;
   height: 64px;
-  padding: 0 24px;
+  padding: 0 48px;
   background: #fff;
+  transition:
+    background-color 0.2s ease,
+    backdrop-filter 0.2s ease;
+}
+
+.global-header.home-mode {
+  background: transparent;
 }
 
 .header-left {
@@ -127,21 +138,51 @@ const handleLogout = async () => {
 }
 
 .logo {
-  height: 32px;
-  width: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(14, 116, 144, 0.16);
 }
 
 .title {
   font-size: 18px;
-  font-weight: 600;
-  color: #1890ff;
+  font-weight: 700;
+  color: #1677ff;
   margin-left: 12px;
   white-space: nowrap;
+}
+
+.home-mode .title {
+  color: #0f172a;
 }
 
 .nav-menu {
   border-bottom: none;
   flex: 1;
+  background: transparent;
+}
+
+.nav-menu :deep(.ant-menu-item) {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.nav-menu :deep(.ant-menu-item:hover),
+.nav-menu :deep(.ant-menu-item-selected) {
+  color: #1677ff;
+}
+
+.home-mode .nav-menu :deep(.ant-menu-item) {
+  color: rgba(15, 23, 42, 0.76);
+}
+
+.home-mode .nav-menu :deep(.ant-menu-item:hover),
+.home-mode .nav-menu :deep(.ant-menu-item-selected) {
+  color: #0f172a;
+}
+
+.home-mode .nav-menu :deep(.ant-menu-item-selected::after) {
+  border-bottom-color: #0f172a;
 }
 
 .header-right {
@@ -178,7 +219,8 @@ const handleLogout = async () => {
   }
 
   .logo {
-    height: 24px;
+    width: 28px;
+    height: 28px;
   }
 
   .logo-wrapper {

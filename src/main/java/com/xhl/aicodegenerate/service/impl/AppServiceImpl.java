@@ -8,6 +8,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.core.AiCodeGeneratorFacade;
 import com.xhl.aicodegenerate.entity.App;
@@ -17,13 +18,13 @@ import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.exception.ThrowUtils;
 import com.xhl.aicodegenerate.mapper.AppMapper;
 import com.xhl.aicodegenerate.model.dto.app.AppQueryRequest;
-import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import com.xhl.aicodegenerate.model.vo.AppVO;
 import com.xhl.aicodegenerate.model.vo.UserVO;
 import com.xhl.aicodegenerate.service.AppService;
 import com.xhl.aicodegenerate.service.ChatHistoryService;
 import com.xhl.aicodegenerate.service.UserService;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -187,23 +188,27 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 5. 先初始化 app 级别对话记忆，避免本次用户消息被数据库恢复逻辑重复加入记忆
-        chatMemoryProvider.get(appId).messages();
-        // 6. 保存用户消息
-        chatHistoryService.saveMessage(appId, loginUser.getId(), message, ChatHistoryMessageTypeEnum.USER.getValue());
-        // 7. 调用 AI 生成代码，并在结束或异常时保存 AI 消息
-        StringBuilder aiMessageBuilder = new StringBuilder();
+        // 5. 先初始化 app 级别对话记忆。
+        // 注意：必须在调用 AI 前初始化，避免本次 @UserMessage 被数据库恢复逻辑重复加载。
+        AppChatMemoryId memoryId = new AppChatMemoryId(appId, loginUser.getId());
+        chatMemoryProvider.get(memoryId).messages();
+        // 6. 调用 AI 生成代码。用户消息和 AI 回复不在这里手动保存，
+        // 而是由 LangChain4j 更新 ChatMemory 时统一进入 DatabaseLoadingChatMemoryStore。
         try {
-            return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId)
-                    .doOnNext(aiMessageBuilder::append)
-                    .doOnComplete(() -> chatHistoryService.saveMessage(appId, loginUser.getId(),
-                            aiMessageBuilder.toString(), ChatHistoryMessageTypeEnum.AI.getValue()))
-                    .doOnError(e -> chatHistoryService.saveMessage(appId, loginUser.getId(),
-                            "AI 回复失败：" + e.getMessage(), ChatHistoryMessageTypeEnum.AI.getValue()));
+            return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, memoryId)
+                    .doOnError(e -> saveErrorMessage(memoryId, e));
         } catch (Exception e) {
-            chatHistoryService.saveMessage(appId, loginUser.getId(),
-                    "AI 回复失败：" + e.getMessage(), ChatHistoryMessageTypeEnum.AI.getValue());
+            saveErrorMessage(memoryId, e);
             throw e;
+        }
+    }
+
+    private void saveErrorMessage(AppChatMemoryId memoryId, Throwable e) {
+        try {
+            // 失败消息也通过 ChatMemory 写入，让它走同一条“先 DB 后 Redis”的保存链路。
+            chatMemoryProvider.get(memoryId).add(AiMessage.from("AI 回复失败：" + e.getMessage()));
+        } catch (Exception ignored) {
+            // 保留原始异常，不用错误记录失败覆盖 AI 调用失败的原因。
         }
     }
 

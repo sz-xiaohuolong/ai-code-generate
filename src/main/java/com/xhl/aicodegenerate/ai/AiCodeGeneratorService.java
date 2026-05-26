@@ -19,7 +19,7 @@ public interface AiCodeGeneratorService {
      * @return
      */
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
-    HtmlCodeResult generateHtmlCode(@MemoryId Long memoryId, @UserMessage String userMessage);
+    HtmlCodeResult generateHtmlCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
 
     /**
@@ -30,7 +30,7 @@ public interface AiCodeGeneratorService {
      * @return
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
-    MultiFileCodeResult generateMultiFileCode(@MemoryId Long memoryId, @UserMessage String userMessage);
+    MultiFileCodeResult generateMultiFileCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
 
     /**
@@ -41,7 +41,7 @@ public interface AiCodeGeneratorService {
      * @return 生成的代码结果
      */
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
-    Flux<String> generateHtmlCodeStream(@MemoryId Long memoryId, @UserMessage String userMessage);
+    Flux<String> generateHtmlCodeStream(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
     /**
      * 生成多文件代码（流式）
@@ -51,6 +51,6 @@ public interface AiCodeGeneratorService {
      * @return 生成的代码结果
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
-    Flux<String> generateMultiFileCodeStream(@MemoryId Long memoryId, @UserMessage String userMessage);
+    Flux<String> generateMultiFileCodeStream(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
 }

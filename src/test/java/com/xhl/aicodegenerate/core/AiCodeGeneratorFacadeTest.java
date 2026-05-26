@@ -1,5 +1,6 @@
 package com.xhl.aicodegenerate.core;
 
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Assertions;
@@ -20,12 +21,12 @@ class AiCodeGeneratorFacadeTest {
 
     @Test
     void generateAndSaveCode() {
-        File file = aiCodeGeneratorFacade.generateAndSaveCode("任务记录网站", CodeGenTypeEnum.MULTI_FILE,1L);
+        File file = aiCodeGeneratorFacade.generateAndSaveCode("任务记录网站", CodeGenTypeEnum.MULTI_FILE, new AppChatMemoryId(1L, 1L));
         Assertions.assertNotNull(file);
     }
     @Test
     void generateAndSaveCodeStream() {
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("简易的贪吃蛇小游戏", CodeGenTypeEnum.MULTI_FILE,1L);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("简易的贪吃蛇小游戏", CodeGenTypeEnum.MULTI_FILE, new AppChatMemoryId(1L, 1L));
         // 阻塞等待所有数据收集完成
         List<String> result = codeStream.collectList().block();
         // 验证结果

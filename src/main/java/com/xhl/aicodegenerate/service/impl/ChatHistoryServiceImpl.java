@@ -85,8 +85,10 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     @Override
     public boolean deleteByAppId(Long appId) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 id 不能为空");
-        boolean result = this.remove(QueryWrapper.create().eq("appId", appId));
+        // 先删 Redis，再删 DB。若 DB 删除失败，后续仍可从 DB 懒加载恢复 Redis；
+        // 反过来先删 DB 则可能因 Redis 删除失败导致旧对话复活。
         chatMemoryStore.deleteMessages(appId);
+        boolean result = this.remove(QueryWrapper.create().eq("appId", appId));
         return result;
     }
 

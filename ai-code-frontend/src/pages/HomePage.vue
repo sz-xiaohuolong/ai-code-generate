@@ -214,20 +214,21 @@ onMounted(() => {
 <style scoped>
 .home-page {
   width: 100vw;
-  min-height: calc(100vh - 136px);
-  margin: -24px 0 0 calc(50% - 50vw);
-  padding: 0 24px 48px;
+  min-height: 100vh;
+  margin: 0 0 0 calc(50% - 50vw);
+  padding: 0 40px 56px;
   background:
-    radial-gradient(circle at 12% 18%, rgba(48, 207, 208, 0.38), transparent 26%),
-    radial-gradient(circle at 82% 8%, rgba(102, 126, 234, 0.42), transparent 30%),
-    radial-gradient(circle at 50% 96%, rgba(67, 233, 123, 0.26), transparent 28%),
-    linear-gradient(135deg, #0f172a 0%, #1e3a8a 42%, #0891b2 100%);
+    radial-gradient(circle at 82% 16%, rgba(125, 249, 255, 0.46), transparent 29%),
+    radial-gradient(circle at 15% 75%, rgba(34, 197, 94, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 84%, rgba(37, 99, 235, 0.54), transparent 36%),
+    linear-gradient(180deg, #fbfefc 0%, #f5fbff 26%, #69e4eb 60%, #3678ff 100%);
 }
 
 .hero-section {
   position: relative;
   width: 100%;
-  padding: 92px 24px 66px;
+  min-height: 760px;
+  padding: 156px 24px 150px;
   text-align: center;
   overflow: hidden;
 }
@@ -238,28 +239,40 @@ onMounted(() => {
   pointer-events: none;
   content: '';
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(circle at center, #000 0%, transparent 72%);
+    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 22%, transparent 82%);
+}
+
+.hero-section::after {
+  position: absolute;
+  right: 8%;
+  bottom: 74px;
+  width: 520px;
+  height: 220px;
+  pointer-events: none;
+  content: '';
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.48), transparent 68%);
+  filter: blur(8px);
 }
 
 .brand {
   position: relative;
   z-index: 1;
   margin: 0;
-  color: #fff;
+  color: #0f172a;
   font-size: 52px;
   font-weight: 800;
   letter-spacing: 0;
-  text-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  text-shadow: 0 18px 44px rgba(59, 130, 246, 0.16);
 }
 
 .subtitle {
   position: relative;
   z-index: 1;
   margin: 18px 0 40px;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(15, 23, 42, 0.62);
   font-size: 22px;
 }
 
@@ -269,13 +282,13 @@ onMounted(() => {
   max-width: 980px;
   margin: 0 auto;
   padding: 18px 20px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.56);
-  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 28px;
   box-shadow:
-    0 30px 100px rgba(2, 6, 23, 0.3),
+    0 34px 110px rgba(30, 64, 175, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(22px);
 }
 
 .prompt-box :deep(.ant-input) {
@@ -305,28 +318,35 @@ onMounted(() => {
 
 .sample-list :deep(.ant-btn) {
   height: 38px;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.18);
+  color: rgba(15, 23, 42, 0.72);
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.84);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
   backdrop-filter: blur(12px);
 }
 
 .sample-list :deep(.ant-btn:hover) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.44);
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.96);
 }
 
 .app-section {
-  max-width: 1440px;
+  position: relative;
+  z-index: 2;
+  max-width: 1660px;
   margin: 0 auto 32px;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: 8px;
-  box-shadow: 0 18px 60px rgba(2, 6, 23, 0.16);
+  padding: 42px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  border-radius: 32px;
+  box-shadow: 0 28px 90px rgba(29, 78, 216, 0.18);
   backdrop-filter: blur(14px);
+}
+
+.hero-section + .app-section {
+  margin-top: -58px;
 }
 
 .section-header {
@@ -361,8 +381,30 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
+  .home-page {
+    padding: 0 16px 32px;
+  }
+
+  .hero-section {
+    min-height: 640px;
+    padding: 126px 0 120px;
+  }
+
   .brand {
     font-size: 32px;
+  }
+
+  .subtitle {
+    font-size: 17px;
+  }
+
+  .prompt-box {
+    border-radius: 20px;
+  }
+
+  .app-section {
+    padding: 24px;
+    border-radius: 24px;
   }
 
   .app-grid {
