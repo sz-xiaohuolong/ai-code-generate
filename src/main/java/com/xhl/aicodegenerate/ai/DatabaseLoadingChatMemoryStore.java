@@ -8,14 +8,18 @@ import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 对话记忆存储。
@@ -40,21 +44,38 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
         // LangChain4j 每次构造 prompt 前都会读取 ChatMemory；先取 Redis 缓存，降低 DB 压力。
-        List<ChatMessage> redisMessages = delegate.getMessages(memoryId);
+        List<ChatMessage> rawRedisMessages = delegate.getMessages(memoryId);
+        List<ChatMessage> redisMessages = removeOrphanToolResultMessages(rawRedisMessages);
+        if (!redisMessages.equals(rawRedisMessages)) {
+            delegate.updateMessages(memoryId, redisMessages);
+        }
         Long appId = parseAppId(memoryId);
         if (appId == null) {
+            return redisMessages;
+        }
+        // Redis 中可能包含 SystemMessage、ToolExecutionResultMessage、带工具调用请求的 AiMessage。
+        // 这些消息是 LangChain4j 工具调用闭环必需的运行时上下文，但不会写入业务历史表。
+        // 如果这里继续用 DB 历史覆盖 Redis，流式工具调用的下一轮模型请求会丢失工具结果，
+        // 导致模型反复尝试写文件、跑偏，甚至无法快速结束。
+        if (hasRuntimeOnlyMessages(redisMessages)) {
             return redisMessages;
         }
         // 再取 DB 最近的历史。DB 是事实源，用于恢复 Redis，也用于纠正 Redis 中的旧数据。
         List<ChatMessage> historyMessages = loadMessagesFromDatabase(appId);
         if (CollUtil.isNotEmpty(historyMessages)) {
-            // Redis 为空、过期，或者与 DB 不一致时，用 DB 刷新 Redis，避免使用旧上下文。
-            if (!samePersistableMessages(redisMessages, historyMessages)) {
+            // Redis 为空、过期时，用 DB 刷新 Redis；二者业务消息一致时保留 Redis 原对象。
+            if (CollUtil.isEmpty(redisMessages)) {
                 delegate.updateMessages(memoryId, historyMessages);
+                return historyMessages;
             }
+            if (samePersistableMessages(redisMessages, historyMessages)) {
+                return redisMessages;
+            }
+            // Redis 中没有工具调用等运行时消息，且业务消息与 DB 不一致，说明 Redis 可能是旧缓存。
+            delegate.updateMessages(memoryId, historyMessages);
             return historyMessages;
         }
-        // DB 已没有历史但 Redis 还有值，说明可能删除过应用或历史，清掉 Redis 防止旧对话复活。
+        // DB 已没有历史但 Redis 还有业务消息，说明可能删除过应用或历史，清掉 Redis 防止旧对话复活。
         if (CollUtil.isNotEmpty(redisMessages)) {
             delegate.deleteMessages(memoryId);
         }
@@ -176,6 +197,56 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
         return toPersistableMessages(oldMessages).equals(toPersistableMessages(newMessages));
     }
 
+    private boolean hasRuntimeOnlyMessages(List<ChatMessage> messages) {
+        if (CollUtil.isEmpty(messages)) {
+            return false;
+        }
+        for (ChatMessage message : messages) {
+            if (toPersistableMessage(message) == null) {
+                return true;
+            }
+            if (message instanceof AiMessage aiMessage && aiMessage.hasToolExecutionRequests()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<ChatMessage> removeOrphanToolResultMessages(List<ChatMessage> messages) {
+        if (CollUtil.isEmpty(messages)) {
+            return new ArrayList<>();
+        }
+        List<ChatMessage> result = new ArrayList<>();
+        Set<String> pendingToolRequestIds = new HashSet<>();
+        boolean changed = false;
+        for (ChatMessage message : messages) {
+            if (message instanceof ToolExecutionResultMessage toolExecutionResultMessage) {
+                if (pendingToolRequestIds.remove(toolExecutionResultMessage.id())) {
+                    result.add(message);
+                } else {
+                    changed = true;
+                }
+                continue;
+            }
+            if (message instanceof AiMessage aiMessage && aiMessage.hasToolExecutionRequests()) {
+                pendingToolRequestIds = getToolRequestIds(aiMessage);
+                result.add(message);
+                continue;
+            }
+            pendingToolRequestIds.clear();
+            result.add(message);
+        }
+        return changed ? result : messages;
+    }
+
+    private Set<String> getToolRequestIds(AiMessage aiMessage) {
+        Set<String> result = new HashSet<>();
+        for (ToolExecutionRequest toolExecutionRequest : aiMessage.toolExecutionRequests()) {
+            result.add(toolExecutionRequest.id());
+        }
+        return result;
+    }
+
     private void insertChatHistory(Long appId, Long userId, PersistableMessage message) {
         // 这里直接使用 Mapper，保证 ChatMemoryStore 是统一写入点，避免 AppService 和 Redis 双写分散。
         ChatHistory chatHistory = new ChatHistory();
@@ -183,7 +254,7 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
         chatHistory.setUserId(userId);
         chatHistory.setMessage(message.message());
         chatHistory.setMessageType(message.messageType());
-        int result = chatHistoryMapper.insert(chatHistory);
+        int result = chatHistoryMapper.insertSelective(chatHistory);
         if (result <= 0) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "保存对话历史失败");
         }

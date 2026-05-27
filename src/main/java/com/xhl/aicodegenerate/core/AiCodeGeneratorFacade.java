@@ -1,6 +1,7 @@
 package com.xhl.aicodegenerate.core;
 
 import com.xhl.aicodegenerate.ai.AiCodeGeneratorService;
+import com.xhl.aicodegenerate.ai.AiCodeGeneratorServiceFactory;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.ai.model.HtmlCodeResult;
 import com.xhl.aicodegenerate.ai.model.MultiFileCodeResult;
@@ -24,7 +25,7 @@ import java.io.File;
 public class AiCodeGeneratorFacade {
 
     @Resource
-    private AiCodeGeneratorService aiCodeGeneratorService;
+    private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 
     /**
      * 统一入口：根据类型生成并保存代码
@@ -37,6 +38,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(memoryId, userMessage);
@@ -63,6 +65,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(memoryId, userMessage);
@@ -72,6 +75,7 @@ public class AiCodeGeneratorFacade {
                 Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(memoryId, userMessage);
                 yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
             }
+            case VUE_PROJECT -> aiCodeGeneratorService.generateVueProjectCodeStream(memoryId, userMessage);
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
@@ -116,6 +120,8 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private Flux<String> generateAndSaveHtmlCodeStream(String userMessage) {
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(
+                new AppChatMemoryId(0L, 0L), CodeGenTypeEnum.HTML);
         Flux<String> result = aiCodeGeneratorService.generateHtmlCodeStream(new AppChatMemoryId(0L, 0L), userMessage);
         // 当流式返回生成代码完成后，再保存代码
         StringBuilder codeBuilder = new StringBuilder();
@@ -145,6 +151,8 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private Flux<String> generateAndSaveMultiFileCodeStream(String userMessage) {
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(
+                new AppChatMemoryId(0L, 0L), CodeGenTypeEnum.MULTI_FILE);
         Flux<String> result = aiCodeGeneratorService.generateMultiFileCodeStream(new AppChatMemoryId(0L, 0L), userMessage);
         // 当流式返回生成代码完成后，再保存代码
         StringBuilder codeBuilder = new StringBuilder();
@@ -178,6 +186,8 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private File generateAndSaveHtmlCode(String userMessage) {
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(
+                new AppChatMemoryId(0L, 0L), CodeGenTypeEnum.HTML);
         HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(new AppChatMemoryId(0L, 0L), userMessage);
         return CodeFileSaver.saveHtmlCodeResult(result);
     }
@@ -189,6 +199,8 @@ public class AiCodeGeneratorFacade {
      * @return 保存的目录
      */
     private File generateAndSaveMultiFileCode(String userMessage) {
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(
+                new AppChatMemoryId(0L, 0L), CodeGenTypeEnum.MULTI_FILE);
         MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(new AppChatMemoryId(0L, 0L), userMessage);
         return CodeFileSaver.saveMultiFileCodeResult(result);
     }

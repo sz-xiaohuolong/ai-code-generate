@@ -2,6 +2,7 @@ package com.xhl.aicodegenerate.config;
 
 import cn.hutool.core.util.StrUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.community.store.memory.chat.redis.StoreType;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -29,7 +30,10 @@ public class RedisChatMemoryStoreConfig {
         RedisChatMemoryStore.Builder builder = RedisChatMemoryStore.builder()
                 .host(host)
                 .port(port)
-                .ttl(ttl);
+                .ttl(ttl)
+                // 新版 RedisChatMemoryStore 默认使用 RedisJSON。
+                // 项目当前使用普通 Redis，显式切到字符串存储，避免依赖 RedisJSON 模块。
+                .storeType(StoreType.STRING);
         if (StrUtil.isNotBlank(password)) {
             builder.password(password);
         }
