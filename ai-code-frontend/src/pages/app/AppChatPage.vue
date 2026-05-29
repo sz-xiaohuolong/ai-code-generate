@@ -11,11 +11,11 @@ import { listAppChatHistoryVoByPage } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { buildAppPreviewUrl } from '@/config/env'
 import { getUserAvatar } from '@/constants/user'
+import AppChatComposer from '@/components/AppChatComposer.vue'
 
 type ChatMessage = {
   role: 'user' | 'ai'
   content: string
-  renderedHtml?: string
   id?: string | number
   createTime?: string
 }
@@ -26,7 +26,6 @@ const loginUserStore = useLoginUserStore()
 const { loginUser } = storeToRefs(loginUserStore)
 const appId = computed(() => String(route.params.id))
 const appInfo = ref<API.AppVO>({})
-const inputMessage = ref('')
 const messages = ref<ChatMessage[]>([])
 const historyLoading = ref(false)
 const hasMoreHistory = ref(false)
@@ -90,13 +89,10 @@ const formatDateTime = (value?: string) => {
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
-  const role = record.messageType === 'ai' ? 'ai' : 'user'
-  const content = record.message || ''
   return {
     id: record.id,
-    role,
-    content,
-    renderedHtml: role === 'ai' ? renderMarkdown(content) : undefined,
+    role: record.messageType === 'ai' ? 'ai' : 'user',
+    content: record.message || '',
     createTime: record.createTime,
   }
 }
@@ -166,18 +162,16 @@ const appendAiContent = (content: string) => {
   const lastMessage = messages.value[messages.value.length - 1]
   if (lastMessage?.role === 'ai') {
     lastMessage.content += content
-    lastMessage.renderedHtml = renderMarkdown(lastMessage.content)
   } else {
     messages.value.push({
       role: 'ai',
       content,
-      renderedHtml: renderMarkdown(content),
     })
   }
 }
 
 const sendMessage = (value?: string) => {
-  const content = (value ?? inputMessage.value).trim()
+  const content = value?.trim() || ''
   if (!content) {
     message.warning('请输入消息')
     return
@@ -186,7 +180,6 @@ const sendMessage = (value?: string) => {
     message.warning('AI 正在生成中')
     return
   }
-  inputMessage.value = ''
   previewVisible.value = false
   messages.value.push({
     role: 'user',
@@ -195,7 +188,6 @@ const sendMessage = (value?: string) => {
   messages.value.push({
     role: 'ai',
     content: '',
-    renderedHtml: '',
   })
 
   generating.value = true
@@ -341,7 +333,6 @@ onBeforeUnmount(() => {
             :key="item.id || `${item.role}-${index}`"
             class="message-row"
             :class="item.role"
-            v-memo="[item.role, item.content]"
           >
             <a-avatar v-if="item.role === 'ai'" size="small">AI</a-avatar>
             <div class="message-bubble">
@@ -349,28 +340,13 @@ onBeforeUnmount(() => {
               <div
                 v-else-if="item.role === 'ai'"
                 class="markdown-body"
-                v-html="item.renderedHtml"
+                v-html="renderMarkdown(item.content)"
               />
               <span v-else>{{ item.content }}</span>
             </div>
           </div>
         </div>
-        <div class="composer">
-          <a-textarea
-            v-model:value="inputMessage"
-            placeholder="请描述你想生成的网站，越详细效果越好哦"
-            :rows="4"
-            :maxlength="1000"
-            show-count
-            @press-enter.ctrl="sendMessage()"
-          />
-          <div class="composer-actions">
-            <span class="composer-tip">Ctrl + Enter 发送</span>
-            <a-button type="primary" shape="circle" :loading="generating" @click="sendMessage()">
-              ↑
-            </a-button>
-          </div>
-        </div>
+        <AppChatComposer :generating="generating" @send="sendMessage" />
       </section>
 
       <section class="preview-panel">
@@ -664,27 +640,6 @@ onBeforeUnmount(() => {
 .markdown-body :deep(th) {
   background: #f8fafc;
   font-weight: 700;
-}
-
-.composer {
-  padding: 12px;
-  border-top: 1px solid #edf0f5;
-}
-
-.composer :deep(.ant-input) {
-  resize: none;
-}
-
-.composer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-.composer-tip {
-  color: #9ca3af;
-  font-size: 13px;
 }
 
 .preview-panel {
