@@ -9,13 +9,22 @@ import com.xhl.aicodegenerate.core.parser.CodeParserExecutor;
 import com.xhl.aicodegenerate.core.saver.CodeFileSaverExecutor;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
+import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
+import cn.hutool.json.JSONUtil;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.model.chat.response.PartialToolCall;
+import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.tool.BeforeToolExecution;
+import dev.langchain4j.service.tool.ToolExecution;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 
 import java.io.File;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI 代码生成外观类，组合生成和保存功能
@@ -65,6 +74,7 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+        // 根据类型创建 AI 服务实例
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
@@ -75,7 +85,10 @@ public class AiCodeGeneratorFacade {
                 Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(memoryId, userMessage);
                 yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
             }
-            case VUE_PROJECT -> aiCodeGeneratorService.generateVueProjectCodeStream(memoryId, userMessage);
+            case VUE_PROJECT -> {
+                TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeTokenStream(memoryId, userMessage);
+                yield tokenStreamToFlux(tokenStream);
+            }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
@@ -83,6 +96,63 @@ public class AiCodeGeneratorFacade {
         };
     }
 
+
+    /**
+     * 将 LangChain4j TokenStream 适配成 Reactor Flux。
+     * <p>
+     * TokenStream 能监听工具调用事件；这里统一封装成 JSON 字符串，
+     * 下游再按生成类型选择不同流处理器。
+     * </p>
+     */
+    private Flux<String> tokenStreamToFlux(TokenStream tokenStream) {
+        return Flux.create(sink -> {
+            AtomicBoolean completed = new AtomicBoolean(false);
+            tokenStream
+                    .onPartialResponse(partialResponse -> emit(sink, completed,
+                            CodeGenStreamMessage.aiResponse(partialResponse)))
+                    .onPartialThinking(partialThinking -> emit(sink, completed,
+                            CodeGenStreamMessage.thinking(partialThinking.text())))
+                    .onPartialToolCall(partialToolCall -> emit(sink, completed,
+                            toToolRequestMessage(partialToolCall)))
+                    .beforeToolExecution(beforeToolExecution -> emit(sink, completed,
+                            toToolRequestMessage(beforeToolExecution)))
+                    .onToolExecuted(toolExecution -> emit(sink, completed,
+                            toToolExecutedMessage(toolExecution)))
+                    .onCompleteResponse(response -> {
+                        if (completed.compareAndSet(false, true)) {
+                            sink.complete();
+                        }
+                    })
+                    .onError(error -> {
+                        if (completed.compareAndSet(false, true)) {
+                            sink.error(error);
+                        }
+                    })
+                    .start();
+        }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    private CodeGenStreamMessage toToolRequestMessage(PartialToolCall partialToolCall) {
+        String id = partialToolCall.id() != null ? partialToolCall.id() : String.valueOf(partialToolCall.index());
+        return CodeGenStreamMessage.toolRequest(id, partialToolCall.name(), partialToolCall.partialArguments());
+    }
+
+    private CodeGenStreamMessage toToolRequestMessage(BeforeToolExecution beforeToolExecution) {
+        ToolExecutionRequest request = beforeToolExecution.request();
+        return CodeGenStreamMessage.toolRequest(request.id(), request.name(), request.arguments());
+    }
+
+    private CodeGenStreamMessage toToolExecutedMessage(ToolExecution toolExecution) {
+        ToolExecutionRequest request = toolExecution.request();
+        return CodeGenStreamMessage.toolExecuted(request.id(), request.name(), request.arguments(), toolExecution.result());
+    }
+
+    private void emit(FluxSink<String> sink, AtomicBoolean completed, CodeGenStreamMessage message) {
+        if (completed.get() || sink.isCancelled()) {
+            return;
+        }
+        sink.next(JSONUtil.toJsonStr(message));
+    }
 
     /**
      * 通用流式代码处理方法

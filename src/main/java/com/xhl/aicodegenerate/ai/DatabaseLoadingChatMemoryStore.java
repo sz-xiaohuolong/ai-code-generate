@@ -8,6 +8,7 @@ import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
+import com.xhl.aicodegenerate.utils.ChatHistoryOrderUtils;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -109,6 +110,8 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
         }
         // SQL 为倒序取最新 N 条，传给模型时需要恢复成正常聊天顺序：旧消息在前，新消息在后。
         Collections.reverse(chatHistoryList);
+        chatHistoryList = ChatHistoryOrderUtils.normalizeVueToolMessageOrder(chatHistoryList,
+                ChatHistory::getMessageType, ChatHistory::getMessage);
         List<ChatMessage> messages = new ArrayList<>();
         for (ChatHistory chatHistory : chatHistoryList) {
             ChatMessage chatMessage = toChatMessage(chatHistory);

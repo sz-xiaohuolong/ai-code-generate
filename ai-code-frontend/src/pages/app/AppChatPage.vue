@@ -15,6 +15,7 @@ import { getUserAvatar } from '@/constants/user'
 type ChatMessage = {
   role: 'user' | 'ai'
   content: string
+  renderedHtml?: string
   id?: string | number
   createTime?: string
 }
@@ -89,10 +90,13 @@ const formatDateTime = (value?: string) => {
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
+  const role = record.messageType === 'ai' ? 'ai' : 'user'
+  const content = record.message || ''
   return {
     id: record.id,
-    role: record.messageType === 'ai' ? 'ai' : 'user',
-    content: record.message || '',
+    role,
+    content,
+    renderedHtml: role === 'ai' ? renderMarkdown(content) : undefined,
     createTime: record.createTime,
   }
 }
@@ -162,10 +166,12 @@ const appendAiContent = (content: string) => {
   const lastMessage = messages.value[messages.value.length - 1]
   if (lastMessage?.role === 'ai') {
     lastMessage.content += content
+    lastMessage.renderedHtml = renderMarkdown(lastMessage.content)
   } else {
     messages.value.push({
       role: 'ai',
       content,
+      renderedHtml: renderMarkdown(content),
     })
   }
 }
@@ -189,6 +195,7 @@ const sendMessage = (value?: string) => {
   messages.value.push({
     role: 'ai',
     content: '',
+    renderedHtml: '',
   })
 
   generating.value = true
@@ -334,6 +341,7 @@ onBeforeUnmount(() => {
             :key="item.id || `${item.role}-${index}`"
             class="message-row"
             :class="item.role"
+            v-memo="[item.role, item.content]"
           >
             <a-avatar v-if="item.role === 'ai'" size="small">AI</a-avatar>
             <div class="message-bubble">
@@ -341,7 +349,7 @@ onBeforeUnmount(() => {
               <div
                 v-else-if="item.role === 'ai'"
                 class="markdown-body"
-                v-html="renderMarkdown(item.content)"
+                v-html="item.renderedHtml"
               />
               <span v-else>{{ item.content }}</span>
             </div>

@@ -37,6 +37,15 @@ public interface ChatHistoryService extends IService<ChatHistory> {
     Long saveMessage(Long appId, Long userId, String message, String messageType);
 
     /**
+     * 更新历史消息内容。
+     *
+     * @param id 消息 id
+     * @param message 新消息内容
+     * @return 是否成功
+     */
+    boolean updateMessage(Long id, String message);
+
+    /**
      * 根据应用 id 删除历史消息。
      *
      * @param appId 应用 id

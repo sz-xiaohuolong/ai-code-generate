@@ -1,5 +1,7 @@
 package com.xhl.aicodegenerate.ai;
 
+import lombok.Data;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -9,6 +11,7 @@ import java.util.Objects;
  *
  * <p>userId 不参与 Redis key 和记忆隔离，只用于 ChatMemoryStore 写入 chat_history 时记录操作者。</p>
  */
+@Data
 public class AppChatMemoryId implements Serializable {
 
     private final Long appId;
@@ -18,14 +21,6 @@ public class AppChatMemoryId implements Serializable {
     public AppChatMemoryId(Long appId, Long userId) {
         this.appId = appId;
         this.userId = userId;
-    }
-
-    public Long getAppId() {
-        return appId;
-    }
-
-    public Long getUserId() {
-        return userId;
     }
 
     @Override

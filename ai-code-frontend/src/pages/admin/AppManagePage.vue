@@ -7,6 +7,7 @@ import {
   listAppVoByPageByAdmin,
   updateAppByAdmin,
 } from '@/api/appController'
+import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 
 const router = useRouter()
 const loading = ref(false)
@@ -61,6 +62,10 @@ const formatDateTime = (value?: string) => {
     return '-'
   }
   return new Date(value).toLocaleString()
+}
+
+const getCodeGenTypeLabel = (type?: string) => {
+  return CODE_GEN_TYPE_CONFIG[type as CodeGenTypeEnum]?.label || type || '-'
 }
 
 const loadData = async () => {
@@ -165,8 +170,13 @@ onMounted(() => {
           allow-clear
           class="search-select"
         >
-          <a-select-option value="html">HTML</a-select-option>
-          <a-select-option value="multi_file">多文件</a-select-option>
+          <a-select-option
+            v-for="item in CODE_GEN_TYPE_CONFIG"
+            :key="item.value"
+            :value="item.value"
+          >
+            {{ item.label }}
+          </a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item label="优先级" name="priority">
@@ -192,6 +202,9 @@ onMounted(() => {
         <template v-if="column.dataIndex === 'cover'">
           <a-image v-if="record.cover" :src="record.cover" :width="48" :height="32" />
           <span v-else>-</span>
+        </template>
+        <template v-else-if="column.dataIndex === 'codeGenType'">
+          {{ getCodeGenTypeLabel(record.codeGenType) }}
         </template>
         <template v-else-if="column.dataIndex === 'priority'">
           <a-tag :color="record.priority === 99 ? 'gold' : 'default'">

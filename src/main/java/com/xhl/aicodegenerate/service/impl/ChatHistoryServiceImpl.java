@@ -19,6 +19,7 @@ import com.xhl.aicodegenerate.model.dto.chat.ChatHistoryQueryRequest;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.vo.ChatHistoryVO;
 import com.xhl.aicodegenerate.service.ChatHistoryService;
+import com.xhl.aicodegenerate.utils.ChatHistoryOrderUtils;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,18 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         boolean result = this.save(chatHistory);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "保存对话历史失败");
         return chatHistory.getId();
+    }
+
+    @Override
+    public boolean updateMessage(Long id, String message) {
+        ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "消息 id 不能为空");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "消息不能为空");
+        ChatHistory chatHistory = new ChatHistory();
+        chatHistory.setId(id);
+        chatHistory.setMessage(message);
+        boolean result = this.updateById(chatHistory);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新对话历史失败");
+        return true;
     }
 
     @Override
@@ -145,6 +158,8 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         Page<ChatHistoryVO> chatHistoryVOPage = buildChatHistoryVOPage(chatHistoryPage, 1, pageSize);
         List<ChatHistoryVO> records = chatHistoryVOPage.getRecords();
         Collections.reverse(records);
+        records = ChatHistoryOrderUtils.normalizeVueToolMessageOrder(records,
+                ChatHistoryVO::getMessageType, ChatHistoryVO::getMessage);
         chatHistoryVOPage.setRecords(records);
         return chatHistoryVOPage;
     }
