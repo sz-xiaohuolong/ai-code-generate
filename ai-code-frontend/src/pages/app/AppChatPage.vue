@@ -1,17 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { message, Modal } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
-import { deleteApp, deleteAppByAdmin, deployApp, getAppVoById } from '@/api/appController'
+import {
+  deleteApp,
+  deleteAppByAdmin,
+  deployApp,
+  downloadAppCode,
+  getAppVoById,
+} from '@/api/appController'
 import { listAppChatHistoryVoByPage } from '@/api/chatHistoryController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { buildAppPreviewUrl } from '@/config/env'
 import { getUserAvatar } from '@/constants/user'
+import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 import AppChatComposer from '@/components/AppChatComposer.vue'
+import {
+  createVisualEditorBridge,
+  formatVisualElementForPrompt,
+  type VisualSelectedElement,
+} from '@/utils/visualEditor'
 
 type ChatMessage = {
   role: 'user' | 'ai'
@@ -31,11 +43,16 @@ const historyLoading = ref(false)
 const hasMoreHistory = ref(false)
 const generating = ref(false)
 const deploying = ref(false)
+const downloading = ref(false)
 const deleting = ref(false)
 const detailModalVisible = ref(false)
 const previewVisible = ref(false)
+const previewFrameRef = ref<HTMLIFrameElement | null>(null)
+const editMode = ref(false)
+const selectedElement = ref<VisualSelectedElement | null>(null)
 let eventSource: EventSource | null = null
 let streamFinished = false
+let visualEditorBridge: ReturnType<typeof createVisualEditorBridge> | null = null
 
 const markdown = new MarkdownIt({
   html: true,
@@ -66,6 +83,10 @@ const previewUrl = computed(() => {
   return buildAppPreviewUrl(appInfo.value.codeGenType, appInfo.value.id)
 })
 
+const codeGenTypeLabel = computed(() => {
+  return CODE_GEN_TYPE_CONFIG[appInfo.value.codeGenType as CodeGenTypeEnum]?.label || '未知模式'
+})
+
 const canOperate = computed(() => {
   return (
     loginUser.value.userRole === 'admin' ||
@@ -86,6 +107,36 @@ const formatDateTime = (value?: string) => {
     return '-'
   }
   return new Date(value).toLocaleString()
+}
+
+const getDownloadFileName = (contentDisposition?: string) => {
+  if (!contentDisposition) {
+    return `${appId.value}.zip`
+  }
+  const utf8FileName = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (utf8FileName) {
+    return decodeURIComponent(utf8FileName)
+  }
+  const fileName = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1]
+  return fileName || `${appId.value}.zip`
+}
+
+const buildPromptWithSelectedElement = (content: string) => {
+  if (!selectedElement.value) {
+    return content
+  }
+  return `${content}\n\n${formatVisualElementForPrompt(selectedElement.value)}`
+}
+
+const clearSelectedElement = () => {
+  selectedElement.value = null
+  visualEditorBridge?.clearSelection()
+}
+
+const exitEditMode = () => {
+  editMode.value = false
+  clearSelectedElement()
+  visualEditorBridge?.disable()
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
@@ -174,11 +225,11 @@ const sendMessage = (value?: string) => {
   const content = value?.trim() || ''
   if (!content) {
     message.warning('请输入消息')
-    return
+    return false
   }
   if (generating.value) {
     message.warning('AI 正在生成中')
-    return
+    return false
   }
   previewVisible.value = false
   messages.value.push({
@@ -233,6 +284,37 @@ const sendMessage = (value?: string) => {
     closeStream()
     message.error('生成连接异常，请稍后重试')
   }
+  return true
+}
+
+const handleUserSendMessage = (value: string) => {
+  const prompt = buildPromptWithSelectedElement(value)
+  if (sendMessage(prompt)) {
+    exitEditMode()
+  }
+}
+
+const toggleEditMode = async () => {
+  if (editMode.value) {
+    exitEditMode()
+    return
+  }
+  if (!previewVisible.value || !previewUrl.value) {
+    message.warning('请先生成并展示网站后再进入编辑模式')
+    return
+  }
+  await nextTick()
+  const enabled = visualEditorBridge?.enable()
+  if (enabled) {
+    editMode.value = true
+    message.info('编辑模式已开启，请在右侧网站中选择元素')
+  }
+}
+
+const handlePreviewLoad = () => {
+  if (editMode.value) {
+    visualEditorBridge?.refresh()
+  }
 }
 
 const handleDeploy = async () => {
@@ -254,6 +336,42 @@ const handleDeploy = async () => {
     }
   } finally {
     deploying.value = false
+  }
+}
+
+const handleDownloadCode = async () => {
+  downloading.value = true
+  try {
+    const res = await downloadAppCode(
+      {
+        appId: appId.value as unknown as number,
+      },
+      {
+        responseType: 'blob',
+        timeout: 120000,
+      },
+    )
+    const contentType = res.headers['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      const errorText = await res.data.text()
+      const errorData = JSON.parse(errorText)
+      message.error(errorData.message || '下载失败')
+      return
+    }
+    const blob = new Blob([res.data], { type: contentType || 'application/zip' })
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = getDownloadFileName(res.headers['content-disposition'])
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
+    message.success('开始下载代码')
+  } catch (error) {
+    message.error('下载失败，请稍后重试')
+  } finally {
+    downloading.value = false
   }
 }
 
@@ -285,6 +403,15 @@ const handleDelete = async () => {
 }
 
 onMounted(() => {
+  visualEditorBridge = createVisualEditorBridge({
+    getIframe: () => previewFrameRef.value,
+    onElementSelected: (element) => {
+      selectedElement.value = element
+    },
+    onError: (errorMessage) => {
+      message.warning(errorMessage)
+    },
+  })
   const initPage = async () => {
     await loadAppInfo()
     const historyLoaded = await loadHistory()
@@ -297,6 +424,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   closeStream()
+  visualEditorBridge?.dispose()
 })
 </script>
 
@@ -306,9 +434,11 @@ onBeforeUnmount(() => {
       <div class="app-title">
         <a-avatar>{{ appInfo.appName?.slice(0, 1) || 'A' }}</a-avatar>
         <span>{{ appInfo.appName || '应用生成' }}</span>
+        <a-tag v-if="appInfo.codeGenType" color="blue">{{ codeGenTypeLabel }}</a-tag>
       </div>
       <a-space>
         <a-button @click="detailModalVisible = true">应用详情</a-button>
+        <a-button :loading="downloading" @click="handleDownloadCode">下载代码</a-button>
         <a-button type="primary" :loading="deploying" @click="handleDeploy">部署</a-button>
       </a-space>
     </div>
@@ -346,16 +476,25 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <AppChatComposer :generating="generating" @send="sendMessage" />
+        <AppChatComposer
+          :generating="generating"
+          :edit-mode="editMode"
+          :selected-element="selectedElement"
+          @send="handleUserSendMessage"
+          @toggle-edit-mode="toggleEditMode"
+          @clear-selected-element="clearSelectedElement"
+        />
       </section>
 
       <section class="preview-panel">
         <iframe
           v-if="previewVisible && previewUrl"
+          ref="previewFrameRef"
           :key="previewUrl + messages.length"
           class="preview-frame"
           :src="previewUrl"
           title="生成后网页展示"
+          @load="handlePreviewLoad"
         />
         <a-empty v-else description="网站文件生成完成后将在这里展示" />
       </section>
@@ -374,6 +513,10 @@ onBeforeUnmount(() => {
         <div class="detail-item">
           <span class="detail-label">创建时间</span>
           <span class="detail-value">{{ formatDateTime(appInfo.createTime) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">生成类型</span>
+          <span class="detail-value">{{ codeGenTypeLabel }}</span>
         </div>
       </div>
 

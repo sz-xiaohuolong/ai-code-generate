@@ -1,6 +1,6 @@
 package com.xhl.aicodegenerate.ai;
 
-import com.xhl.aicodegenerate.ai.tools.FileWriteTool;
+import com.xhl.aicodegenerate.ai.tools.*;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
@@ -96,7 +96,7 @@ public class AiCodeGeneratorServiceFactory {
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(currentChatMemoryProvider)
                     // 允许模型通过工具调用直接写入 Vue 工程文件。
-                    .tools(new FileWriteTool(VUE_PROJECT_MAX_FILE_WRITE_COUNT))
+                    .tools(new FileWriteTool(VUE_PROJECT_MAX_FILE_WRITE_COUNT), new FileReadTool(), new FileDeleteTool(), new FileDirReadTool(), new FileModifyTool())
                     .maxSequentialToolsInvocations(VUE_PROJECT_MAX_FILE_WRITE_COUNT)
                     // 如果模型幻觉调用了不存在的工具，给模型一个明确的工具错误结果，而不是直接中断。
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
@@ -125,5 +125,14 @@ public class AiCodeGeneratorServiceFactory {
                 .build();
     }
 
+    /**
+     * 创建AI代码生成类型路由服务实例
+     */
+    @Bean
+    public AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService() {
+        return AiServices.builder(AiCodeGenTypeRoutingService.class)
+                .chatModel(chatModel)
+                .build();
+    }
 
 }

@@ -4,6 +4,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.xhl.aicodegenerate.entity.App;
 import com.xhl.aicodegenerate.entity.User;
+import com.xhl.aicodegenerate.model.dto.app.AppAddRequest;
 import com.xhl.aicodegenerate.model.dto.app.AppQueryRequest;
 import com.xhl.aicodegenerate.model.vo.AppVO;
 import reactor.core.publisher.Flux;
@@ -16,6 +17,9 @@ import java.util.List;
  * @author <a href="https://github.com/sz-xiaohuolong">不会喷火的小火龙</a>
  */
 public interface AppService extends IService<App> {
+
+
+    Long addApp(AppAddRequest appAddRequest,User loginUser);
 
     /**
      * 校验应用。
