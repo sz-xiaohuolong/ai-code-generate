@@ -244,7 +244,7 @@ public class AppController {
 
 
     /**
-     * 应用聊天生成代码（流式 SSE）
+     * 应用聊天生成代码（流式 SSE）, 核心接口
      *
      * @param appId   应用 ID
      * @param message 用户消息

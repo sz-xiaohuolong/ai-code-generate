@@ -50,12 +50,30 @@ public class AiCodeGeneratorFacade {
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
         return switch (codeGenTypeEnum) {
             case HTML -> {
-                HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(memoryId, userMessage);
-                yield CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.HTML, memoryId.getAppId());
+                try {
+                    HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(memoryId, userMessage);
+                    yield CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.HTML, memoryId.getAppId());
+                } catch (Exception e) {
+                    log.warn("HTML 结构化生成解析失败，尝试使用原始文本解析兜底: {}", e.getMessage());
+                    AiCodeGeneratorService fallbackService = aiCodeGeneratorServiceFactory
+                            .createAiCodeGeneratorServiceWithoutMemory(CodeGenTypeEnum.HTML);
+                    String rawCode = fallbackService.generateHtmlCodeRaw(userMessage);
+                    Object parsedResult = CodeParserExecutor.executeParser(rawCode, CodeGenTypeEnum.HTML);
+                    yield CodeFileSaverExecutor.executeSaver(parsedResult, CodeGenTypeEnum.HTML, memoryId.getAppId());
+                }
             }
             case MULTI_FILE -> {
-                MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(memoryId, userMessage);
-                yield CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
+                try {
+                    MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(memoryId, userMessage);
+                    yield CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
+                } catch (Exception e) {
+                    log.warn("多文件结构化生成解析失败，尝试使用原始文本解析兜底: {}", e.getMessage());
+                    AiCodeGeneratorService fallbackService = aiCodeGeneratorServiceFactory
+                            .createAiCodeGeneratorServiceWithoutMemory(CodeGenTypeEnum.MULTI_FILE);
+                    String rawCode = fallbackService.generateMultiFileCodeRaw(userMessage);
+                    Object parsedResult = CodeParserExecutor.executeParser(rawCode, CodeGenTypeEnum.MULTI_FILE);
+                    yield CodeFileSaverExecutor.executeSaver(parsedResult, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
+                }
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();

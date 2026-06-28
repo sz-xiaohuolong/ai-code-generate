@@ -2,11 +2,13 @@ package com.xhl.aicodegenerate.core.builder;
 
 import cn.hutool.core.util.RuntimeUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
+@Component
 public class VueProjectBuilder {
 
 

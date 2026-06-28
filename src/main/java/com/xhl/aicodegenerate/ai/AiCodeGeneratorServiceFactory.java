@@ -114,6 +114,33 @@ public class AiCodeGeneratorServiceFactory {
         };
     }
 
+    /**
+     * 创建不绑定对话记忆的 AI 服务实例。
+     * <p>
+     * 仅用于 HTML / MULTI_FILE 的 raw 文本兜底生成：
+     * 当结构化输出解析失败或模型输出格式漂移时，第二次请求不应该继续携带第一次失败的上下文，
+     * 否则会让提示词变长、格式约束相互干扰，甚至再次触发超时。
+     * </p>
+     */
+    public AiCodeGeneratorService createAiCodeGeneratorServiceWithoutMemory(CodeGenTypeEnum codeGenType) {
+        ChatMemoryProvider transientChatMemoryProvider = memoryId ->
+                dev.langchain4j.memory.chat.MessageWindowChatMemory.builder()
+                        .id(memoryId)
+                        .maxMessages(CHAT_MEMORY_MAX_MESSAGES)
+                        .build();
+        return switch (codeGenType) {
+            case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
+                    .chatModel(chatModel)
+                    .streamingChatModel(openAiStreamingChatModel)
+                    // AiCodeGeneratorService 接口中仍包含 @MemoryId 方法，LangChain4j 创建代理时会校验 provider。
+                    // 这里使用不绑定 ChatMemoryStore 的临时内存，避免兜底生成写入 Redis / DB 正式对话记忆。
+                    .chatMemoryProvider(transientChatMemoryProvider)
+                    .build();
+            default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,
+                    "不支持无记忆生成类型: " + codeGenType.getValue());
+        };
+    }
+
     @Bean
     public AiCodeGeneratorService aiCodeGeneratorService(ChatMemoryProvider chatMemoryProvider) {
         // 保留一个默认 AI Service Bean，兼容测试或其他直接注入 AiCodeGeneratorService 的旧代码。

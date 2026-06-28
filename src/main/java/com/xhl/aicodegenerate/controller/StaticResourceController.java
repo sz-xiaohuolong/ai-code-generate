@@ -73,6 +73,7 @@ public class StaticResourceController {
         if (filePath.endsWith(".html")) return "text/html; charset=UTF-8";
         if (filePath.endsWith(".css")) return "text/css; charset=UTF-8";
         if (filePath.endsWith(".js")) return "application/javascript; charset=UTF-8";
+        if (filePath.endsWith(".svg")) return "image/svg+xml; charset=UTF-8";
         if (filePath.endsWith(".png")) return "image/png";
         if (filePath.endsWith(".jpg")) return "image/jpeg";
         return "application/octet-stream";

@@ -10,6 +10,7 @@ import reactor.core.publisher.Flux;
 
 
 //仅作为 AI 调用接口，不写复杂逻辑
+//LangChain4j 的声明式接口，没有手写实现类
 public interface AiCodeGeneratorService {
 
     /**
@@ -22,6 +23,24 @@ public interface AiCodeGeneratorService {
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
     HtmlCodeResult generateHtmlCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
+    /**
+     * 生成 HTML 原始文本。
+     * <p>
+     * 用于结构化输出偶发解析失败时兜底，再交给本地 CodeParser 解析代码块。
+     * </p>
+     */
+    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    String generateHtmlCodeRaw(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
+
+    /**
+     * 生成 HTML 原始文本（无对话记忆）。
+     * <p>
+     * 用于工作流兜底生成，避免结构化生成失败后的历史上下文污染第二次请求。
+     * </p>
+     */
+    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    String generateHtmlCodeRaw(@UserMessage String userMessage);
+
 
     /**
      * 生成多文件代码
@@ -32,6 +51,24 @@ public interface AiCodeGeneratorService {
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
     MultiFileCodeResult generateMultiFileCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
+
+    /**
+     * 生成多文件原始文本。
+     * <p>
+     * 用于结构化输出偶发解析失败时兜底，再交给本地 CodeParser 解析代码块。
+     * </p>
+     */
+    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    String generateMultiFileCodeRaw(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
+
+    /**
+     * 生成多文件原始文本（无对话记忆）。
+     * <p>
+     * 用于工作流兜底生成，避免结构化生成失败后的历史上下文污染第二次请求。
+     * </p>
+     */
+    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    String generateMultiFileCodeRaw(@UserMessage String userMessage);
 
 
     /**
