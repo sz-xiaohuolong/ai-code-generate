@@ -34,7 +34,7 @@ class CodeGenWorkflowTest {
     @Test
     void testCorporateWorkflow() {
         WorkflowContext result = executeWorkflowAndPublishToApp(
-                "创建一个简洁企业官网，展示公司形象和业务介绍，包含首页横幅、服务介绍和联系方式，总代码不超过 180 行",
+                "创建一个简洁企业官网，多文件，展示公司形象和业务介绍，包含首页横幅、服务介绍和联系方式，总代码不超过 180 行",
                 "工作流企业官网");
         Assertions.assertNotNull(result);
         System.out.println("生成类型: " + result.getGenerationType());

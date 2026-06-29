@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.core.AiCodeGeneratorFacade;
+import com.xhl.aicodegenerate.langgraph4j.model.QualityResult;
 import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import com.xhl.aicodegenerate.utils.SpringContextUtil;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.List;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
@@ -40,7 +42,7 @@ public class CodeGeneratorNode {
                     : context.getGenerationType();
             Long appId = context.getAppId() == null ? 0L : context.getAppId();
             Long userId = context.getUserId() == null ? 0L : context.getUserId();
-            String userMessage = StrUtil.blankToDefault(context.getEnhancedPrompt(), context.getOriginalPrompt());
+            String userMessage = buildUserMessage(context);
 
             context.setGenerationType(generationType);
             context.setGeneratedCodeDir(AppConstant.CODE_OUTPUT_ROOT_DIR
@@ -67,5 +69,39 @@ public class CodeGeneratorNode {
             }
             return WorkflowContext.saveContext(context);
         });
+    }
+
+    static String buildUserMessage(WorkflowContext context) {
+        String userMessage = StrUtil.blankToDefault(context.getEnhancedPrompt(), context.getOriginalPrompt());
+        QualityResult qualityResult = context.getQualityResult();
+        if (!isQualityCheckFailed(qualityResult)) {
+            return userMessage;
+        }
+        Integer retryCount = context.getQualityCheckRetryCount();
+        context.setQualityCheckRetryCount(retryCount == null ? 1 : retryCount + 1);
+        StringBuilder errorInfo = new StringBuilder();
+        errorInfo.append(userMessage).append("\n\n");
+        errorInfo.append("## 上次生成的代码存在以下问题，请基于原需求重新生成并修复\n");
+        appendList(errorInfo, "错误列表", qualityResult.getErrors());
+        appendList(errorInfo, "修复建议", qualityResult.getSuggestions());
+        errorInfo.append("\n请重新生成完整代码，确保上述问题全部修复。");
+        return errorInfo.toString();
+    }
+
+    private static boolean isQualityCheckFailed(QualityResult qualityResult) {
+        return qualityResult != null
+                && Boolean.FALSE.equals(qualityResult.getIsValid())
+                && qualityResult.getErrors() != null
+                && !qualityResult.getErrors().isEmpty();
+    }
+
+    private static void appendList(StringBuilder builder, String title, List<String> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        builder.append("\n### ").append(title).append("\n");
+        for (String item : items) {
+            builder.append("- ").append(item).append("\n");
+        }
     }
 }

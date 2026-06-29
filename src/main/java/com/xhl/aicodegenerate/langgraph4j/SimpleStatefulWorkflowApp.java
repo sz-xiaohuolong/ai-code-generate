@@ -73,7 +73,7 @@ public class SimpleStatefulWorkflowApp {
 
         // 执行工作流
         int stepCounter = 1;
-        for (NodeOutput<MessagesState<String>> step : workflow.stream(Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+        for (NodeOutput<MessagesState<String>> step : workflow.stream(WorkflowContext.saveContext(initialContext))) {
             log.info("--- 第 {} 步完成 ---", stepCounter);
             // 显示当前状态
             WorkflowContext currentContext = WorkflowContext.getContext(step.state());

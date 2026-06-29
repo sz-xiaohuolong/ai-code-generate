@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangGraph4j 工作流 SSE 演示</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+        main { max-width: 1080px; margin: 0 auto; padding: 28px 18px; }
+        h1 { margin: 0 0 20px; font-size: 28px; }
+        .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; }
+        textarea { width: 100%; min-height: 86px; resize: vertical; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 15px; }
+        .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+        label { display: grid; gap: 6px; font-size: 13px; color: #4b5563; }
+        input { width: 100%; padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+        button { border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; font-size: 14px; }
+        .primary { background: #1677ff; color: #fff; }
+        .secondary { background: #e5e7eb; color: #111827; }
+        .status { margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: #eef2ff; }
+        .events { margin-top: 16px; display: grid; gap: 10px; }
+        .event { border-left: 4px solid #1677ff; background: #fff; border-radius: 6px; padding: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, .08); }
+        .event h3 { margin: 0 0 8px; font-size: 15px; color: #1677ff; }
+        pre { margin: 0; white-space: pre-wrap; word-break: break-word; background: #f9fafb; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>LangGraph4j 工作流 SSE 演示</h1>
+    <section class="panel">
+        <textarea id="prompt">创建一个简洁企业官网，展示公司形象和业务介绍，包含首页横幅、服务介绍和联系方式</textarea>
+        <div class="fields">
+            <label>App ID（可选）
+                <input id="appId" placeholder="不填则使用临时 appId">
+            </label>
+            <label>User ID（可选）
+                <input id="userId" placeholder="不填默认为 0">
+            </label>
+        </div>
+        <div class="actions">
+            <button class="primary" onclick="startWorkflow()">开始工作流</button>
+            <button class="secondary" onclick="clearEvents()">清空日志</button>
+            <button class="secondary" onclick="closeStream()">关闭连接</button>
+        </div>
+        <div id="status" class="status">未连接</div>
+        <div id="events" class="events"></div>
+    </section>
+</main>
+<script>
+    let source;
+
+    function startWorkflow() {
+        closeStream();
+        clearEvents();
+        const prompt = document.getElementById('prompt').value.trim();
+        if (!prompt) {
+            alert('请输入提示词');
+            return;
+        }
+        setStatus('连接中...');
+        const params = new URLSearchParams({ prompt });
+        const appId = document.getElementById('appId').value.trim();
+        const userId = document.getElementById('userId').value.trim();
+        if (appId) {
+            params.set('appId', appId);
+        }
+        if (userId) {
+            params.set('userId', userId);
+        }
+        source = new EventSource('/api/workflow/execute-flux?' + params.toString());
+        source.onopen = () => setStatus('已连接，工作流执行中');
+        source.onerror = () => setStatus('连接结束或发生错误');
+        ['workflow_start', 'step_completed', 'workflow_completed', 'workflow_error'].forEach(type => {
+            source.addEventListener(type, event => {
+                addEvent(type, event.data);
+                if (type === 'workflow_completed' || type === 'workflow_error') {
+                    closeStream();
+                }
+            });
+        });
+    }
+
+    function addEvent(type, data) {
+        const item = document.createElement('div');
+        item.className = 'event';
+        let formatted = data;
+        try {
+            formatted = JSON.stringify(JSON.parse(data), null, 2);
+        } catch (ignored) {
+        }
+        item.innerHTML = '<h3>' + type + '</h3><pre>' + escapeHtml(formatted) + '</pre>';
+        document.getElementById('events').appendChild(item);
+        item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function clearEvents() {
+        document.getElementById('events').innerHTML = '';
+    }
+
+    function closeStream() {
+        if (source) {
+            source.close();
+            source = null;
+        }
+    }
+
+    function setStatus(text) {
+        document.getElementById('status').textContent = text;
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+    }
+</script>
+</body>
+</html>

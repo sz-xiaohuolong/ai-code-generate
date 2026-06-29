@@ -5,7 +5,6 @@ import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.core.builder.VueProjectBuilder;
 import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
-import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import com.xhl.aicodegenerate.utils.SpringContextUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
@@ -19,7 +18,7 @@ import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 /**
  * 项目构建节点。
  * <p>
- * 目前只有 Vue 工程需要执行 npm install/build，HTML 和多文件模式只需要把生成目录作为结果目录。
+ * 条件边保证只有 Vue 工程会进入本节点。
  * </p>
  */
 @Slf4j
@@ -39,25 +38,20 @@ public class ProjectBuilderNode {
                 return WorkflowContext.saveContext(context);
             }
 
-            CodeGenTypeEnum generationType = context.getGenerationType();
             String buildResultDir;
-            if (generationType == CodeGenTypeEnum.VUE_PROJECT) {
-                try {
-                    VueProjectBuilder vueBuilder = SpringContextUtil.getBean(VueProjectBuilder.class);
-                    boolean buildSuccess = vueBuilder.buildProject(generatedCodeDir);
-                    if (buildSuccess) {
-                        buildResultDir = generatedCodeDir + File.separator + "dist";
-                        log.info("Vue 项目构建成功，dist 目录: {}", buildResultDir);
-                    } else {
-                        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败");
-                    }
-                } catch (Exception e) {
-                    log.error("Vue 项目构建异常: {}", e.getMessage(), e);
-                    buildResultDir = generatedCodeDir;
-                    context.setErrorMessage(e.getMessage());
+            try {
+                VueProjectBuilder vueBuilder = SpringContextUtil.getBean(VueProjectBuilder.class);
+                boolean buildSuccess = vueBuilder.buildProject(generatedCodeDir);
+                if (buildSuccess) {
+                    buildResultDir = generatedCodeDir + File.separator + "dist";
+                    log.info("Vue 项目构建成功，dist 目录: {}", buildResultDir);
+                } else {
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败");
                 }
-            } else {
+            } catch (Exception e) {
+                log.error("Vue 项目构建异常: {}", e.getMessage(), e);
                 buildResultDir = generatedCodeDir;
+                context.setErrorMessage(e.getMessage());
             }
 
             context.setBuildResultDir(buildResultDir);
