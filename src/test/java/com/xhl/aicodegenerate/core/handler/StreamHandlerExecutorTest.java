@@ -1,8 +1,6 @@
 package com.xhl.aicodegenerate.core.handler;
 
 import cn.hutool.json.JSONUtil;
-import com.xhl.aicodegenerate.constant.AppConstant;
-import com.xhl.aicodegenerate.core.builder.VueProjectBuilder;
 import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
@@ -11,7 +9,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 
-import java.nio.file.Paths;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,7 +58,6 @@ class StreamHandlerExecutorTest {
     @Test
     void executeJsonMessageStreamAndPersistToolOutput() {
         ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
-        VueProjectBuilder vueProjectBuilder = mock(VueProjectBuilder.class);
         when(chatHistoryService.saveMessage(eq(1L), eq(2L), eq("\n\n[选择工具] 写入文件\n"),
                 eq(ChatHistoryMessageTypeEnum.AI.getValue()))).thenReturn(100L);
 
@@ -75,7 +71,7 @@ class StreamHandlerExecutorTest {
                 JSONUtil.toJsonStr(CodeGenStreamMessage.aiResponse("生成代码结束！"))
         );
 
-        new JsonMessageStreamHandler(chatHistoryService, 1L, 2L, vueProjectBuilder)
+        new JsonMessageStreamHandler(chatHistoryService, 1L, 2L)
                 .handle(originFlux)
                 .collectList()
                 .block();
@@ -86,21 +82,5 @@ class StreamHandlerExecutorTest {
         verify(chatHistoryService, times(1)).saveMessage(1L, 2L, "\n\n[选择工具] 写入文件\n",
                 ChatHistoryMessageTypeEnum.AI.getValue());
         verify(chatHistoryService, times(1)).updateMessage(100L, persistedToolMessage);
-    }
-
-    @Test
-    void executeJsonMessageStreamAndBuildVueProjectOnComplete() {
-        VueProjectBuilder vueProjectBuilder = mock(VueProjectBuilder.class);
-        Flux<String> originFlux = Flux.just(
-                JSONUtil.toJsonStr(CodeGenStreamMessage.aiResponse("生成代码结束！"))
-        );
-
-        new JsonMessageStreamHandler(null, 100L, 200L, vueProjectBuilder)
-                .handle(originFlux)
-                .collectList()
-                .block();
-
-        String expectedProjectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, "vue_project_100").toString();
-        verify(vueProjectBuilder, times(1)).buildProjectAsync(expectedProjectPath);
     }
 }

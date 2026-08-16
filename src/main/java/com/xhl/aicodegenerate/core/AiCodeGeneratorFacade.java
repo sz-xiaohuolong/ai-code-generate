@@ -5,6 +5,8 @@ import com.xhl.aicodegenerate.ai.AiCodeGeneratorServiceFactory;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.ai.model.HtmlCodeResult;
 import com.xhl.aicodegenerate.ai.model.MultiFileCodeResult;
+import com.xhl.aicodegenerate.constant.AppConstant;
+import com.xhl.aicodegenerate.core.builder.VueProjectBuilder;
 import com.xhl.aicodegenerate.core.parser.CodeParserExecutor;
 import com.xhl.aicodegenerate.core.saver.CodeFileSaverExecutor;
 import com.xhl.aicodegenerate.exception.BusinessException;
@@ -24,6 +26,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -33,8 +36,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class AiCodeGeneratorFacade {
 
+    private static final String VUE_PROJECT_DIR_PREFIX = "vue_project_";
+
     @Resource
     private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     /**
      * 统一入口：根据类型生成并保存代码
@@ -105,7 +113,7 @@ public class AiCodeGeneratorFacade {
             }
             case VUE_PROJECT -> {
                 TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeTokenStream(memoryId, userMessage);
-                yield tokenStreamToFlux(tokenStream);
+                yield tokenStreamToFlux(tokenStream, memoryId.getAppId());
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
@@ -122,7 +130,7 @@ public class AiCodeGeneratorFacade {
      * 下游再按生成类型选择不同流处理器。
      * </p>
      */
-    private Flux<String> tokenStreamToFlux(TokenStream tokenStream) {
+    private Flux<String> tokenStreamToFlux(TokenStream tokenStream, Long appId) {
         return Flux.create(sink -> {
             AtomicBoolean completed = new AtomicBoolean(false);
             tokenStream
@@ -138,6 +146,11 @@ public class AiCodeGeneratorFacade {
                             toToolExecutedMessage(toolExecution)))
                     .onCompleteResponse(response -> {
                         if (completed.compareAndSet(false, true)) {
+                            try {
+                                buildVueProject(appId);
+                            } catch (Exception e) {
+                                log.error("Vue 项目同步构建异常: {}", e.getMessage(), e);
+                            }
                             sink.complete();
                         }
                     })
@@ -170,6 +183,24 @@ public class AiCodeGeneratorFacade {
             return;
         }
         sink.next(JSONUtil.toJsonStr(message));
+    }
+
+    /**
+     * 同步构建 Vue 项目。
+     * <p>
+     * 在 TokenStream 完成回调中阻塞执行 npm install + npm run build，
+     * 保证 AI 回复完成时构建也已结束，前端可以立即浏览到最新页面。
+     * </p>
+     */
+    private void buildVueProject(Long appId) {
+        if (appId == null || appId <= 0) {
+            return;
+        }
+        String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
+        boolean buildSuccess = vueProjectBuilder.buildProject(projectPath);
+        if (!buildSuccess) {
+            log.warn("Vue 项目同步构建失败: {}", projectPath);
+        }
     }
 
     /**

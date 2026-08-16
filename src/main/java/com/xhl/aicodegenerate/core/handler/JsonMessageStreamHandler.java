@@ -3,15 +3,12 @@ package com.xhl.aicodegenerate.core.handler;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.xhl.aicodegenerate.constant.AppConstant;
-import com.xhl.aicodegenerate.core.builder.VueProjectBuilder;
 import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.enums.CodeGenStreamMessageTypeEnum;
 import com.xhl.aicodegenerate.service.ChatHistoryService;
 import reactor.core.publisher.Flux;
 
-import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,30 +24,20 @@ public class JsonMessageStreamHandler implements StreamHandler {
 
     private static final String WRITE_FILE_TOOL_NAME = "writeFile";
 
-    private static final String VUE_PROJECT_DIR_PREFIX = "vue_project_";
-
     private final ChatHistoryService chatHistoryService;
 
     private final Long appId;
 
     private final Long userId;
 
-    private final VueProjectBuilder vueProjectBuilder;
-
     public JsonMessageStreamHandler() {
         this(null, null, null);
     }
 
     public JsonMessageStreamHandler(ChatHistoryService chatHistoryService, Long appId, Long userId) {
-        this(chatHistoryService, appId, userId, new VueProjectBuilder());
-    }
-
-    public JsonMessageStreamHandler(ChatHistoryService chatHistoryService, Long appId, Long userId,
-                                    VueProjectBuilder vueProjectBuilder) {
         this.chatHistoryService = chatHistoryService;
         this.appId = appId;
         this.userId = userId;
-        this.vueProjectBuilder = vueProjectBuilder;
     }
 
     @Override
@@ -95,7 +82,7 @@ public class JsonMessageStreamHandler implements StreamHandler {
                     sink.next(toolExecutedMessage);
                 }
             }
-        }).doOnComplete(this::buildVueProject);
+        });
     }
 
     private CodeGenStreamMessage parseMessage(String chunk) {
@@ -178,13 +165,5 @@ public class JsonMessageStreamHandler implements StreamHandler {
 
     private boolean isPersistenceEnabled() {
         return chatHistoryService != null && appId != null && appId > 0 && userId != null && userId > 0;
-    }
-
-    private void buildVueProject() {
-        if (vueProjectBuilder == null || appId == null || appId <= 0) {
-            return;
-        }
-        String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
-        vueProjectBuilder.buildProjectAsync(projectPath);
     }
 }
