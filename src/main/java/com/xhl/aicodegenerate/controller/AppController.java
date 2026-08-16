@@ -13,12 +13,15 @@ import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.constant.UserConstant;
 import com.xhl.aicodegenerate.entity.App;
 import com.xhl.aicodegenerate.entity.User;
+import dev.langchain4j.guardrail.InputGuardrailException;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.exception.ThrowUtils;
 import com.xhl.aicodegenerate.model.dto.app.*;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import com.xhl.aicodegenerate.model.vo.AppVO;
+import com.xhl.aicodegenerate.ratelimit.annotation.RateLimit;
+import com.xhl.aicodegenerate.ratelimit.enums.RateLimitType;
 import com.xhl.aicodegenerate.service.AppService;
 import com.xhl.aicodegenerate.service.ProjectDownloadService;
 import com.xhl.aicodegenerate.service.UserService;
@@ -258,6 +261,8 @@ public class AppController {
      * @return 生成结果流
      */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(key = "ai_chat", limitType = RateLimitType.USER, rate = 5, rateInterval = 60,
+            message = "AI 对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                       @RequestParam String message,
                                       HttpServletRequest request) {
@@ -276,6 +281,7 @@ public class AppController {
                             .data(jsonData)
                             .build();
                 })
+                .onErrorResume(error -> Mono.just(buildSseBusinessError(error)))
                 .concatWith(Mono.just(
                         // 发送结束事件
                         ServerSentEvent.<String>builder()
@@ -283,6 +289,41 @@ public class AppController {
                                 .data("[DONE]")
                                 .build()
                 ));
+    }
+
+    private ServerSentEvent<String> buildSseBusinessError(Throwable error) {
+        Throwable cause = findRelevantCause(error);
+        int code;
+        String message;
+        if (cause instanceof BusinessException businessException) {
+            code = businessException.getCode();
+            message = businessException.getMessage();
+        } else if (cause instanceof InputGuardrailException) {
+            code = ErrorCode.PARAMS_ERROR.getCode();
+            message = cause.getMessage();
+        } else {
+            code = ErrorCode.SYSTEM_ERROR.getCode();
+            message = "生成过程中出现错误，请稍后重试";
+        }
+        String data = JSONUtil.toJsonStr(Map.of(
+                "error", true,
+                "code", code,
+                "message", message
+        ));
+        return ServerSentEvent.<String>builder()
+                .event("business-error")
+                .data(data)
+                .build();
+    }
+
+    private Throwable findRelevantCause(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null
+                && !(current instanceof BusinessException)
+                && !(current instanceof InputGuardrailException)) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     /**

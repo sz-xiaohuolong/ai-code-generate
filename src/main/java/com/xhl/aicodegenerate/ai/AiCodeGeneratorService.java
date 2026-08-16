@@ -2,10 +2,12 @@ package com.xhl.aicodegenerate.ai;
 
 import com.xhl.aicodegenerate.ai.model.HtmlCodeResult;
 import com.xhl.aicodegenerate.ai.model.MultiFileCodeResult;
+import com.xhl.aicodegenerate.ai.guardrail.RetryOutputGuardrail;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.guardrail.OutputGuardrails;
 import reactor.core.publisher.Flux;
 
 
@@ -21,6 +23,7 @@ public interface AiCodeGeneratorService {
      * @return
      */
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     HtmlCodeResult generateHtmlCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
     /**
@@ -30,6 +33,7 @@ public interface AiCodeGeneratorService {
      * </p>
      */
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     String generateHtmlCodeRaw(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
     /**
@@ -39,6 +43,7 @@ public interface AiCodeGeneratorService {
      * </p>
      */
     @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     String generateHtmlCodeRaw(@UserMessage String userMessage);
 
 
@@ -50,6 +55,7 @@ public interface AiCodeGeneratorService {
      * @return
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     MultiFileCodeResult generateMultiFileCode(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
     /**
@@ -59,6 +65,7 @@ public interface AiCodeGeneratorService {
      * </p>
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     String generateMultiFileCodeRaw(@MemoryId AppChatMemoryId memoryId, @UserMessage String userMessage);
 
     /**
@@ -68,6 +75,7 @@ public interface AiCodeGeneratorService {
      * </p>
      */
     @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    @OutputGuardrails(value = RetryOutputGuardrail.class, maxRetries = 3)
     String generateMultiFileCodeRaw(@UserMessage String userMessage);
 
 

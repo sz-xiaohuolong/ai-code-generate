@@ -1,5 +1,6 @@
 package com.xhl.aicodegenerate.ai;
 
+import com.xhl.aicodegenerate.ai.guardrail.PromptSafetyInputGuardrail;
 import com.xhl.aicodegenerate.ai.tools.*;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
@@ -44,8 +45,11 @@ public class AiCodeGeneratorServiceFactory {
      */
     private static final int VUE_PROJECT_MAX_FILE_WRITE_COUNT = 20;
 
-    @Resource
+    @Resource(name = "openAiChatModel")
     private ChatModel chatModel;
+
+    @Resource(name = "routingChatModel")
+    private ChatModel routingChatModel;
 
     @Resource
     private StreamingChatModel openAiStreamingChatModel;
@@ -95,9 +99,10 @@ public class AiCodeGeneratorServiceFactory {
                     // Vue 工程生成需要工具调用和更强推理能力，所以使用单独配置的推理流式模型。
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(currentChatMemoryProvider)
+                    .inputGuardrails(new PromptSafetyInputGuardrail())
                     // 允许模型通过工具调用直接写入 Vue 工程文件。
                     .tools(new FileWriteTool(VUE_PROJECT_MAX_FILE_WRITE_COUNT), new FileReadTool(), new FileDeleteTool(), new FileDirReadTool(), new FileModifyTool())
-                    .maxSequentialToolsInvocations(VUE_PROJECT_MAX_FILE_WRITE_COUNT)
+                    .maxToolCallingRoundTrips(VUE_PROJECT_MAX_FILE_WRITE_COUNT)
                     // 如果模型幻觉调用了不存在的工具，给模型一个明确的工具错误结果，而不是直接中断。
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
@@ -108,6 +113,7 @@ public class AiCodeGeneratorServiceFactory {
                     .chatModel(chatModel)
                     .streamingChatModel(openAiStreamingChatModel)
                     .chatMemoryProvider(currentChatMemoryProvider)
+                    .inputGuardrails(new PromptSafetyInputGuardrail())
                     .build();
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,
                     "不支持的代码生成类型: " + codeGenType.getValue());
@@ -135,6 +141,7 @@ public class AiCodeGeneratorServiceFactory {
                     // AiCodeGeneratorService 接口中仍包含 @MemoryId 方法，LangChain4j 创建代理时会校验 provider。
                     // 这里使用不绑定 ChatMemoryStore 的临时内存，避免兜底生成写入 Redis / DB 正式对话记忆。
                     .chatMemoryProvider(transientChatMemoryProvider)
+                    .inputGuardrails(new PromptSafetyInputGuardrail())
                     .build();
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,
                     "不支持无记忆生成类型: " + codeGenType.getValue());
@@ -149,6 +156,7 @@ public class AiCodeGeneratorServiceFactory {
                 .chatModel(chatModel)
                 .streamingChatModel(openAiStreamingChatModel)
                 .chatMemoryProvider(chatMemoryProvider)
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 
@@ -158,7 +166,8 @@ public class AiCodeGeneratorServiceFactory {
     @Bean
     public AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService() {
         return AiServices.builder(AiCodeGenTypeRoutingService.class)
-                .chatModel(chatModel)
+                .chatModel(routingChatModel)
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 

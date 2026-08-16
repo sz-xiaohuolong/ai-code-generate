@@ -80,15 +80,12 @@
 
 **Files:**
 - Modify: `src/main/resources/application.yml`
-- Modify: `src/main/java/com/xhl/aicodegenerate/config/ReasoningStreamingChatModelConfig.java`
 - Modify: `src/main/java/com/xhl/aicodegenerate/ai/AiCodeGeneratorServiceFactory.java`
-- Test: `src/test/java/com/xhl/aicodegenerate/config/ReasoningStreamingChatModelConfigTest.java`
 
 **Interfaces:**
-- Produces: models with 3 transport retries and Vue services with at most 20 tool round trips.
+- Produces: synchronous models with 3 transport retries and Vue services with at most 20 tool round trips.
 
-- [ ] Write a failing configuration test for the reasoning model retry property.
-- [ ] Configure default models and the manual reasoning model for 3 retries.
+- [ ] Configure the default synchronous model for 3 retries; do not add an unsupported retry property to `OpenAiStreamingChatModel`.
 - [ ] Replace deprecated sequential invocation configuration with `maxToolCallingRoundTrips(20)`.
 - [ ] Run configuration and factory tests.
 

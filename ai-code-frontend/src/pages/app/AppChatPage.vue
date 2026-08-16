@@ -272,6 +272,30 @@ const sendMessage = (value?: string) => {
     showPreviewAfterGenerated()
   })
 
+  eventSource.addEventListener('business-error', (event: MessageEvent) => {
+    if (streamFinished) {
+      return
+    }
+    try {
+      const errorData = JSON.parse(event.data) as { message?: string }
+      const errorMessage = errorData.message || '生成过程中出现错误'
+      const lastMessage = messages.value[messages.value.length - 1]
+      if (lastMessage?.role === 'ai') {
+        lastMessage.content = `❌ ${errorMessage}`
+      }
+      streamFinished = true
+      generating.value = false
+      message.error(errorMessage)
+      closeStream()
+    } catch (error) {
+      console.error('解析 SSE 业务错误失败:', error, event.data)
+      streamFinished = true
+      generating.value = false
+      message.error('服务器返回了无法解析的错误')
+      closeStream()
+    }
+  })
+
   eventSource.onerror = () => {
     if (streamFinished) {
       return
