@@ -26,6 +26,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -149,6 +150,11 @@ public class AppController {
     /**
      * 用户分页查询精选应用列表。
      */
+    @Cacheable(
+            cacheNames = "featuredApp",
+            key = "@cacheKeyUtils.generateKey(#appQueryRequest)",
+            condition = "#appQueryRequest.pageNum >= 1 && #appQueryRequest.pageNum <= 10"
+    )
     @PostMapping("/list/page/featured")
     public BaseResponse<Page<AppVO>> listFeaturedAppVOByPage(@RequestBody AppQueryRequest appQueryRequest,
                                                              HttpServletRequest request) {
