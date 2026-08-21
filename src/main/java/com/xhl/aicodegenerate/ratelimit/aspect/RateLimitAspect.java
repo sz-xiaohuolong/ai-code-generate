@@ -44,6 +44,7 @@ public class RateLimitAspect {
     @Before("@annotation(rateLimit)")
     public void doBefore(JoinPoint point, RateLimit rateLimit) {
         String key = generateRateLimitKey(point, rateLimit);
+        // 使用Redisson的分布式限流器
         RRateLimiter rateLimiter = redissonClient.getRateLimiter(key);
         rateLimiter.trySetRate(
                 RateType.OVERALL,
@@ -62,6 +63,7 @@ public class RateLimitAspect {
         if (StrUtil.isNotBlank(rateLimit.key())) {
             key.append(rateLimit.key()).append(':');
         }
+        // 根据限流类型生成限流 key
         switch (rateLimit.limitType()) {
             case API -> appendApiKey(key, point);
             case USER -> appendUserOrIpKey(key);
@@ -91,6 +93,7 @@ public class RateLimitAspect {
                 // 未登录时按 IP 限流，避免匿名请求绕过保护。
             }
         }
+        // 降级策略：获取用户信息失败时，按 IP 限流
         key.append("ip:").append(getClientIp());
     }
 

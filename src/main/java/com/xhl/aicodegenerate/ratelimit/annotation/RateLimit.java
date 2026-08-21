@@ -8,7 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 声明式分布式限流。
+ * 声明式分布式限流注解。
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -16,9 +16,9 @@ public @interface RateLimit {
 
     String key() default "";
 
-    int rate() default 10;
+    int rate() default 5;
 
-    int rateInterval() default 1;
+    int rateInterval() default 10;
 
     RateLimitType limitType() default RateLimitType.USER;
 

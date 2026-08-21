@@ -39,16 +39,4 @@ knife4j:
   setting:
     language: zh_cn
 
-# AI 模型的稳定性与成本控制。连接信息由激活环境提供。
-langchain4j:
-  open-ai:
-    chat-model:
-      max-retries: 3
-    routing-chat-model:
-      base-url: ${ROUTING_MODEL_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-      api-key: ${DASHSCOPE_API_KEY:}
-      model-name: ${ROUTING_MODEL_NAME:qwen-turbo}
-      max-tokens: 100
-      max-retries: 3
-      log-requests: true
-      log-responses: true
+
