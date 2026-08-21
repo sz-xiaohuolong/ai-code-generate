@@ -230,14 +230,17 @@ sequenceDiagram
     S->>M: 初始化 AppChatMemoryId(appId, userId)
     S->>F: generateAndSaveCodeStream(message, type, memoryId)
     F->>AI: 按类型创建代理 (VUE_PROJECT 挂文件工具+推理模型)
-    AI->>M: 读写多轮记忆 (DB 事实源 → Redis 缓存)
-    AI-->>F: 流式返回 (HTML/MULTI_FILE: 文本 · VUE_PROJECT: TokenStream+工具)
-    F-->>S: Flux&lt;String&gt;
-    S-->>FE: SSE 逐 token 输出 (d: chunk / done: [DONE])
-    Note over F,P,V: 流结束后
+    AI->>M: 读写多轮记忆 (DB事实源 → Redis缓存)
+    AI-->>F: 流式返回 (HTML/MULTI_FILE:文本 · VUE_PROJECT:TokenStream+工具)
+    F-->>S: Flux<String>
+    S-->>FE: SSE逐token输出 (d:chunk / done:[DONE])
+
+    Note over F: SSE流结束后触发代码解析流程
+
     F->>P: 解析完整代码
-    F->>V: 保存到 tmp/code_output/&lt;type&gt;_&lt;appId&gt;/
-    Note over F,P,V: 结构化解析失败 → 无记忆 raw 文本兜底
+    F->>V: 保存到 tmp/code_output/<type>_<appId>/
+
+    Note over P,V: 结构化解析失败 → 无记忆raw文本兜底
 ```
 
 ---
