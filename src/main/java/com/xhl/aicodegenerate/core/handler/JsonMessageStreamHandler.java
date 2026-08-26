@@ -1,8 +1,9 @@
 package com.xhl.aicodegenerate.core.handler;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.xhl.aicodegenerate.ai.tools.BaseTool;
+import com.xhl.aicodegenerate.ai.tools.ToolManager;
 import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.enums.CodeGenStreamMessageTypeEnum;
@@ -22,22 +23,28 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class JsonMessageStreamHandler implements StreamHandler {
 
-    private static final String WRITE_FILE_TOOL_NAME = "writeFile";
-
     private final ChatHistoryService chatHistoryService;
 
     private final Long appId;
 
     private final Long userId;
 
+    private final ToolManager toolManager;
+
     public JsonMessageStreamHandler() {
-        this(null, null, null);
+        this(null, null, null, null);
     }
 
     public JsonMessageStreamHandler(ChatHistoryService chatHistoryService, Long appId, Long userId) {
+        this(chatHistoryService, appId, userId, null);
+    }
+
+    public JsonMessageStreamHandler(ChatHistoryService chatHistoryService, Long appId, Long userId,
+                                    ToolManager toolManager) {
         this.chatHistoryService = chatHistoryService;
         this.appId = appId;
         this.userId = userId;
+        this.toolManager = toolManager;
     }
 
     @Override
@@ -66,7 +73,7 @@ public class JsonMessageStreamHandler implements StreamHandler {
                 String key = StrUtil.blankToDefault(message.getId(), toolName);
                 boolean sameToolAlreadyActive = activeToolRequestKeys.contains(toolName);
                 if (activeToolRequestKeys.add(key) && !sameToolAlreadyActive) {
-                    String toolRequestMessage = "\n\n[选择工具] " + getToolDisplayName(toolName) + "\n";
+                    String toolRequestMessage = formatToolRequestMessage(toolName);
                     persistToolContent(toolRequestMessage, persistedToolContentBuilder, persistedToolMessageId);
                     sink.next(toolRequestMessage);
                 }
@@ -96,55 +103,28 @@ public class JsonMessageStreamHandler implements StreamHandler {
         }
     }
 
+    private BaseTool resolveTool(String toolName) {
+        if (toolManager == null) {
+            return null;
+        }
+        return toolManager.getTool(toolName);
+    }
+
+    private String formatToolRequestMessage(String toolName) {
+        BaseTool tool = resolveTool(toolName);
+        if (tool != null) {
+            return tool.formatToolRequestMessage();
+        }
+        return "\n\n[选择工具] " + StrUtil.blankToDefault(toolName, "未知工具") + "\n";
+    }
+
     private String formatToolExecutedMessage(CodeGenStreamMessage message) {
-        if (!WRITE_FILE_TOOL_NAME.equals(message.getName())) {
-            return "\n\n[工具调用] " + getToolDisplayName(message.getName()) + "\n" + StrUtil.nullToEmpty(message.getData()) + "\n";
+        BaseTool tool = resolveTool(message.getName());
+        if (tool != null) {
+            return tool.formatToolExecutedMessage(message);
         }
-        JSONObject arguments = parseArguments(message.getArguments());
-        String relativeFilePath = arguments.getStr("relativeFilePath");
-        String content = arguments.getStr("content");
-        if (StrUtil.isBlank(relativeFilePath)) {
-            return "\n\n[工具调用] 写入文件完成\n" + StrUtil.nullToEmpty(message.getData()) + "\n";
-        }
-        if (StrUtil.isBlank(content)) {
-            return "\n\n[工具调用] 写入文件 " + relativeFilePath + "\n" + StrUtil.nullToEmpty(message.getData()) + "\n";
-        }
-        return "\n\n[工具调用] 写入文件 " + relativeFilePath
-                + "\n```" + getMarkdownLanguage(relativeFilePath)
-                + "\n" + content
-                + "\n```\n";
-    }
-
-    private JSONObject parseArguments(String arguments) {
-        if (StrUtil.isBlank(arguments) || !JSONUtil.isTypeJSON(arguments)) {
-            return new JSONObject();
-        }
-        try {
-            return JSONUtil.parseObj(arguments);
-        } catch (Exception e) {
-            return new JSONObject();
-        }
-    }
-
-    private String getToolDisplayName(String toolName) {
-        if (WRITE_FILE_TOOL_NAME.equals(toolName)) {
-            return "写入文件";
-        }
-        return StrUtil.blankToDefault(toolName, "未知工具");
-    }
-
-    private String getMarkdownLanguage(String relativeFilePath) {
-        String suffix = StrUtil.subAfter(relativeFilePath, ".", true);
-        return switch (suffix) {
-            case "vue" -> "vue";
-            case "js", "mjs", "cjs" -> "javascript";
-            case "ts" -> "typescript";
-            case "css" -> "css";
-            case "html" -> "html";
-            case "json" -> "json";
-            case "md" -> "markdown";
-            default -> "";
-        };
+        return "\n\n[工具调用] " + StrUtil.blankToDefault(message.getName(), "未知工具") + "\n"
+                + StrUtil.nullToEmpty(message.getData()) + "\n";
     }
 
     private void persistToolContent(String content, StringBuilder contentBuilder, AtomicReference<Long> messageIdRef) {

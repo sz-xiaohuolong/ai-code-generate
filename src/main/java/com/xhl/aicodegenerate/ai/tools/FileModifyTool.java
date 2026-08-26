@@ -1,10 +1,12 @@
 package com.xhl.aicodegenerate.ai.tools;
 
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,7 +19,18 @@ import java.nio.file.StandardOpenOption;
  * 支持 AI 通过工具调用的方式修改文件内容
  */
 @Slf4j
-public class FileModifyTool {
+@Component
+public class FileModifyTool extends BaseTool {
+
+    @Override
+    public String getToolName() {
+        return "modifyFile";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "修改文件";
+    }
 
     @Tool("修改文件内容，用新内容替换指定的旧内容")
     public String modifyFile(
@@ -27,9 +40,10 @@ public class FileModifyTool {
             String oldContent,
             @P("替换后的新内容")
             String newContent,
-            @ToolMemoryId Long appId
+            @ToolMemoryId AppChatMemoryId memoryId
     ) {
         try {
+            Long appId = memoryId.getAppId();
             Path path = Paths.get(relativeFilePath);
             if (!path.isAbsolute()) {
                 String projectDirName = "vue_project_" + appId;

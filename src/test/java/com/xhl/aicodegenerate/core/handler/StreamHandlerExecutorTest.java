@@ -1,6 +1,8 @@
 package com.xhl.aicodegenerate.core.handler;
 
 import cn.hutool.json.JSONUtil;
+import com.xhl.aicodegenerate.ai.tools.FileWriteTool;
+import com.xhl.aicodegenerate.ai.tools.ToolManager;
 import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.ChatHistoryMessageTypeEnum;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
@@ -31,6 +33,9 @@ class StreamHandlerExecutorTest {
 
     @Test
     void executeJsonMessageStream() {
+        ToolManager toolManager = mock(ToolManager.class);
+        when(toolManager.getTool("writeFile")).thenReturn(new FileWriteTool());
+
         String arguments = JSONUtil.createObj()
                 .set("relativeFilePath", "src/App.vue")
                 .set("content", "<template><div>todo</div></template>")
@@ -43,7 +48,8 @@ class StreamHandlerExecutorTest {
                 JSONUtil.toJsonStr(CodeGenStreamMessage.aiResponse("生成代码结束！"))
         );
 
-        String content = String.join("", StreamHandlerExecutor.execute(originFlux, CodeGenTypeEnum.VUE_PROJECT)
+        String content = String.join("", StreamHandlerExecutor.execute(originFlux, CodeGenTypeEnum.VUE_PROJECT,
+                        100L, 200L, null, toolManager)
                 .collectList()
                 .block());
 
@@ -58,6 +64,8 @@ class StreamHandlerExecutorTest {
     @Test
     void executeJsonMessageStreamAndPersistToolOutput() {
         ChatHistoryService chatHistoryService = mock(ChatHistoryService.class);
+        ToolManager toolManager = mock(ToolManager.class);
+        when(toolManager.getTool("writeFile")).thenReturn(new FileWriteTool());
         when(chatHistoryService.saveMessage(eq(1L), eq(2L), eq("\n\n[选择工具] 写入文件\n"),
                 eq(ChatHistoryMessageTypeEnum.AI.getValue()))).thenReturn(100L);
 
@@ -71,7 +79,7 @@ class StreamHandlerExecutorTest {
                 JSONUtil.toJsonStr(CodeGenStreamMessage.aiResponse("生成代码结束！"))
         );
 
-        new JsonMessageStreamHandler(chatHistoryService, 1L, 2L)
+        new JsonMessageStreamHandler(chatHistoryService, 1L, 2L, toolManager)
                 .handle(originFlux)
                 .collectList()
                 .block();

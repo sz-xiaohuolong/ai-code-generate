@@ -1,32 +1,55 @@
 package com.xhl.aicodegenerate.ai.tools;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
+import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 文件写入工具
  * 支持 AI 通过工具调用的方式写入文件
  */
 @Slf4j
-public class FileWriteTool {
+@Component
+public class FileWriteTool extends BaseTool {
 
-    private final int maxFileWrites;
+    @Override
+    public String getToolName() {
+        return "writeFile";
+    }
 
-    private final AtomicInteger fileWriteCount = new AtomicInteger();
+    @Override
+    public String getDisplayName() {
+        return "写入文件";
+    }
 
-    public FileWriteTool(int maxFileWrites) {
-        this.maxFileWrites = maxFileWrites;
+    @Override
+    public String formatToolExecutedMessage(CodeGenStreamMessage message) {
+        JSONObject arguments = parseArguments(message.getArguments());
+        String relativeFilePath = arguments.getStr("relativeFilePath");
+        String content = arguments.getStr("content");
+        if (StrUtil.isBlank(relativeFilePath)) {
+            return "\n\n[工具调用] " + getDisplayName() + "完成\n" + StrUtil.nullToEmpty(message.getData()) + "\n";
+        }
+        if (StrUtil.isBlank(content)) {
+            return "\n\n[工具调用] " + getDisplayName() + " " + relativeFilePath + "\n" + StrUtil.nullToEmpty(message.getData()) + "\n";
+        }
+        return "\n\n[工具调用] " + getDisplayName() + " " + relativeFilePath
+                + "\n```" + getMarkdownLanguage(relativeFilePath)
+                + "\n" + content
+                + "\n```\n";
     }
 
     @Tool("写入文件到指定路径")
@@ -37,10 +60,6 @@ public class FileWriteTool {
             String content,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        int currentCount = fileWriteCount.incrementAndGet();
-        if (currentCount > maxFileWrites) {
-            throw new IllegalStateException("Vue 工程文件写入次数超过上限：" + maxFileWrites);
-        }
         try {
             Long appId = memoryId.getAppId();
             Path path = Paths.get(relativeFilePath);

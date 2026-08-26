@@ -10,6 +10,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.xhl.aicodegenerate.ai.AiCodeGenTypeRoutingService;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
+import com.xhl.aicodegenerate.ai.tools.ToolManager;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.core.AiCodeGeneratorFacade;
 import com.xhl.aicodegenerate.core.builder.VueProjectBuilder;
@@ -73,6 +74,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
+
+    @Resource
+    private ToolManager toolManager;
 
 
     private final VueProjectBuilder vueProjectBuilder = new VueProjectBuilder();
@@ -230,7 +234,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         try {
             Flux<String> originFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, memoryId);
             // 处理成json格式并返回给前端
-            return StreamHandlerExecutor.execute(originFlux, codeGenTypeEnum, appId, loginUser.getId(), chatHistoryService)
+            return StreamHandlerExecutor.execute(originFlux, codeGenTypeEnum, appId, loginUser.getId(), chatHistoryService, toolManager)
                     .doOnError(e -> saveErrorMessage(memoryId, e));
         } catch (Exception e) {
             saveErrorMessage(memoryId, e);

@@ -1,11 +1,13 @@
 package com.xhl.aicodegenerate.ai.tools;
 
 import cn.hutool.core.io.FileUtil;
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -18,7 +20,18 @@ import java.util.Set;
  * 使用 Hutool 简化文件操作
  */
 @Slf4j
-public class FileDirReadTool {
+@Component
+public class FileDirReadTool extends BaseTool {
+
+    @Override
+    public String getToolName() {
+        return "readDir";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "读取目录结构";
+    }
 
     /**
      * 需要忽略的文件和目录
@@ -39,9 +52,10 @@ public class FileDirReadTool {
     public String readDir(
             @P("目录的相对路径，为空则读取整个项目结构")
             String relativeDirPath,
-            @ToolMemoryId Long appId
+            @ToolMemoryId AppChatMemoryId memoryId
     ) {
         try {
+            Long appId = memoryId.getAppId();
             Path path = Paths.get(relativeDirPath == null ? "" : relativeDirPath);
             if (!path.isAbsolute()) {
                 String projectDirName = "vue_project_" + appId;

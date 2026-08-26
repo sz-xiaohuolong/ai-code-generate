@@ -1,7 +1,7 @@
 package com.xhl.aicodegenerate.ai;
 
 import com.xhl.aicodegenerate.ai.guardrail.PromptSafetyInputGuardrail;
-import com.xhl.aicodegenerate.ai.tools.*;
+import com.xhl.aicodegenerate.ai.tools.ToolManager;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
@@ -41,7 +41,7 @@ public class AiCodeGeneratorServiceFactory {
 
     /**
      * Vue 工程模式会让模型连续调用文件写入工具。
-     * 同时用于 AiServices 同步工具调用上限，以及 FileWriteTool 在流式调用中的写文件次数上限。
+     * 用于 AiServices 工具调用轮次上限，防止模型陷入无限工具循环。
      */
     private static final int VUE_PROJECT_MAX_FILE_WRITE_COUNT = 20;
 
@@ -62,6 +62,9 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     private ChatHistoryMapper chatHistoryMapper;
+
+    @Resource
+    private ToolManager toolManager;
 
     @Bean
     @Primary
@@ -100,8 +103,8 @@ public class AiCodeGeneratorServiceFactory {
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(currentChatMemoryProvider)
                     .inputGuardrails(new PromptSafetyInputGuardrail())
-                    // 允许模型通过工具调用直接写入 Vue 工程文件。
-                    .tools(new FileWriteTool(VUE_PROJECT_MAX_FILE_WRITE_COUNT), new FileReadTool(), new FileDeleteTool(), new FileDirReadTool(), new FileModifyTool())
+                    // 允许模型通过工具调用直接写入 Vue 工程文件，工具统一由 ToolManager 收集注册。
+                    .tools((Object[]) toolManager.getAllTools())
                     .maxToolCallingRoundTrips(VUE_PROJECT_MAX_FILE_WRITE_COUNT)
                     // 如果模型幻觉调用了不存在的工具，给模型一个明确的工具错误结果，而不是直接中断。
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(

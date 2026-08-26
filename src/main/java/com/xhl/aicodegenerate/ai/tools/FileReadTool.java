@@ -1,10 +1,12 @@
 package com.xhl.aicodegenerate.ai.tools;
 
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,15 +18,27 @@ import java.nio.file.Paths;
  * 支持 AI 通过工具调用的方式读取文件内容
  */
 @Slf4j
-public class FileReadTool {
+@Component
+public class FileReadTool extends BaseTool {
+
+    @Override
+    public String getToolName() {
+        return "readFile";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "读取文件";
+    }
 
     @Tool("读取指定路径的文件内容")
     public String readFile(
             @P("文件的相对路径")
             String relativeFilePath,
-            @ToolMemoryId Long appId
+            @ToolMemoryId AppChatMemoryId memoryId
     ) {
         try {
+            Long appId = memoryId.getAppId();
             Path path = Paths.get(relativeFilePath);
             if (!path.isAbsolute()) {
                 String projectDirName = "vue_project_" + appId;
