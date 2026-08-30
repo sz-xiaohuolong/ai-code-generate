@@ -22,7 +22,8 @@ import org.springframework.context.annotation.Primary;
  * AI 代码生成服务工厂。
  * <p>
  * 该配置类负责把 LangChain4j 提供的 {@link ChatModel} 和
- * {@link StreamingChatModel} 组装成 {@link AiCodeGeneratorService} 的代理实现，
+ * {@link StreamingChatModel} 组装成 {@link
+ * AiCodeGeneratorService} 的代理实现，
  * 并将该代理对象注册为 Spring Bean。
  * </p>
  * <p>

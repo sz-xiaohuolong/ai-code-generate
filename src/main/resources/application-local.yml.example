@@ -1,0 +1,41 @@
+# ==============================================================
+# 本地开发配置模板
+# 复制为 application-local.yml 后填写你的密钥（该文件已被 gitignore，不会提交到仓库）
+#   cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
+# 说明：MySQL / Redis 连接在 application.yml 中配置（默认 localhost:3306 / 6379）
+# ==============================================================
+
+# AI 模型配置（LangChain4j · OpenAI 兼容协议）
+langchain4j:
+  open-ai:
+    # 默认对话模型：HTML / 多文件模式使用；
+    # 同时作为 Vue 工程模式的推理流式模型底座（base-url / api-key 复用本段配置）
+    chat-model:
+      base-url: https://api.deepseek.com        # OpenAI 兼容的 Base URL
+      api-key: YOUR_CHAT_MODEL_API_KEY          # 你的 API Key
+      model-name: deepseek-chat                 # 模型名
+      log-requests: true
+      log-responses: true
+      max-retries: 3
+
+    # 路由模型：AI 智能选择代码生成类型（推荐轻量快速模型，可留空自动回退主模型）
+    routing-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: YOUR_ROUTING_MODEL_API_KEY
+      model-name: qwen-turbo
+      max-tokens: 100
+      max-retries: 3
+      log-requests: true
+      log-responses: true
+
+    # 流式模型：SSE 逐 token 输出
+    streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: YOUR_STREAMING_MODEL_API_KEY
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
+
+# Pexels 图片搜索配置（工作流图片收集节点使用，可选）
+pexels:
+  api-key: YOUR_PEXELS_API_KEY

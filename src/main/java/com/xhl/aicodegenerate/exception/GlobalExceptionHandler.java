@@ -21,8 +21,7 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
-
-    @ExceptionHandler(BusinessException.class)
+    @ExceptionHandler(BusinessException.class)  // 业务异常 → 对应错误码返回
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
         log.error("BusinessException", e);
         if (handleSseError(e.getCode(), e.getMessage())) {
@@ -40,7 +39,7 @@ public class GlobalExceptionHandler {
         return ResultUtils.error(ErrorCode.PARAMS_ERROR.getCode(), e.getMessage());
     }
 
-    @ExceptionHandler(RuntimeException.class)
+    @ExceptionHandler(RuntimeException.class) // 兜底：没被上面接住的运行时异常
     public BaseResponse<?> runtimeExceptionHandler(RuntimeException e) {
         log.error("RuntimeException", e);
         if (handleSseError(ErrorCode.SYSTEM_ERROR.getCode(), "系统错误")) {

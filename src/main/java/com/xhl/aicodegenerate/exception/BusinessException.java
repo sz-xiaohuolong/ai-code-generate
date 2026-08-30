@@ -2,6 +2,9 @@ package com.xhl.aicodegenerate.exception;
 
 import lombok.Getter;
 
+/**
+ * 自定义运行时异常
+ */
 @Getter
 public class BusinessException extends RuntimeException {
 
