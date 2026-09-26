@@ -6,21 +6,21 @@ import { listChatHistoryVoByPageByAdmin } from '@/api/chatHistoryController'
 const loading = ref(false)
 const dataList = ref<API.ChatHistoryVO[]>([])
 const total = ref(0)
+const searchId = ref('')
+const searchAppId = ref('')
+const searchUserId = ref('')
 
 const searchParams = reactive<API.ChatHistoryQueryRequest>({
   pageNum: 1,
   pageSize: 10,
   sortField: 'createTime',
   sortOrder: 'descend',
-  id: undefined,
   message: '',
   messageType: '',
-  appId: undefined,
-  userId: undefined,
 })
 
 const columns = [
-  { title: 'id', dataIndex: 'id', width: 90 },
+  { title: 'id', dataIndex: 'id', width: 190 },
   { title: '消息内容', dataIndex: 'message', ellipsis: true },
   { title: '消息类型', dataIndex: 'messageType', width: 110 },
   { title: '应用 id', dataIndex: 'appId', width: 140 },
@@ -44,6 +44,9 @@ const buildSearchParams = () => {
       params[key as keyof API.ChatHistoryQueryRequest] = value as never
     }
   })
+  if (searchId.value.trim()) params.id = searchId.value.trim() as unknown as number
+  if (searchAppId.value.trim()) params.appId = searchAppId.value.trim() as unknown as number
+  if (searchUserId.value.trim()) params.userId = searchUserId.value.trim() as unknown as number
   return params
 }
 
@@ -86,11 +89,11 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchParams.pageNum = 1
-  searchParams.id = undefined
+  searchId.value = ''
   searchParams.message = ''
   searchParams.messageType = ''
-  searchParams.appId = undefined
-  searchParams.userId = undefined
+  searchAppId.value = ''
+  searchUserId.value = ''
   loadData()
 }
 
@@ -107,9 +110,16 @@ onMounted(() => {
 
 <template>
   <div class="chat-history-manage-page">
+    <div class="manage-heading">
+      <div>
+        <h1>对话管理</h1>
+        <p>查询平台应用的对话记录</p>
+      </div>
+      <span class="manage-count">共 {{ total }} 条对话</span>
+    </div>
     <a-form class="search-form" layout="inline" :model="searchParams" @finish="handleSearch">
       <a-form-item label="id" name="id">
-        <a-input-number v-model:value="searchParams.id" :min="1" placeholder="对话 id" />
+        <a-input v-model:value="searchId" inputmode="numeric" placeholder="对话 id" />
       </a-form-item>
       <a-form-item label="消息" name="message">
         <a-input v-model:value="searchParams.message" placeholder="消息内容" allow-clear />
@@ -126,10 +136,10 @@ onMounted(() => {
         </a-select>
       </a-form-item>
       <a-form-item label="应用 id" name="appId">
-        <a-input-number v-model:value="searchParams.appId" :min="1" placeholder="应用 id" />
+        <a-input v-model:value="searchAppId" inputmode="numeric" placeholder="应用 id" />
       </a-form-item>
       <a-form-item label="用户 id" name="userId">
-        <a-input-number v-model:value="searchParams.userId" :min="1" placeholder="用户 id" />
+        <a-input v-model:value="searchUserId" inputmode="numeric" placeholder="用户 id" />
       </a-form-item>
       <a-form-item>
         <a-space>
@@ -145,6 +155,7 @@ onMounted(() => {
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
+      :scroll="{ x: 1250 }"
       @change="doTableChange"
     >
       <template #bodyCell="{ column, record }">
@@ -166,13 +177,13 @@ onMounted(() => {
 
 <style scoped>
 .chat-history-manage-page {
-  padding: 24px;
-  background: #fff;
+  padding: 0;
+  background: var(--ui-surface);
   border-radius: 8px;
 }
 
 .search-form {
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .search-select {

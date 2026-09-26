@@ -78,6 +78,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private ToolManager toolManager;
 
+    @Resource
+    private com.xhl.aicodegenerate.service.AppScreenshotService appScreenshotService;
 
     private final VueProjectBuilder vueProjectBuilder = new VueProjectBuilder();
 
@@ -318,6 +320,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
+
+        // 异步触发部署版真实封面截图
+        try {
+            appScreenshotService.captureAppCoverAsync(appId, deployDirPath);
+        } catch (Exception e) {
+            log.warn("部署成功后触发封面截图异常: appId={}, error={}", appId, e.getMessage());
+        }
+
         // 9. 返回可访问的URL
         return String.format("%s/%s/",AppConstant.CODE_DEPLOY_HOST, deployKey);
     }

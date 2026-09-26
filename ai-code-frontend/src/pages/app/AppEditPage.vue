@@ -161,14 +161,15 @@ onMounted(() => {
 .app-edit-page {
   display: flex;
   justify-content: center;
-  padding: 24px 16px;
+  padding: 32px 16px;
 }
 
 .edit-panel {
   width: 100%;
-  max-width: 640px;
-  padding: 32px;
-  background: #fff;
+  max-width: 720px;
+  padding: 36px 40px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
   border-radius: 8px;
 }
 
@@ -177,22 +178,30 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--ui-line);
 }
 
 .page-header h1 {
   margin: 0;
-  color: #111827;
+  color: var(--ui-ink);
   font-size: 24px;
   font-weight: 700;
 }
 
 .page-header p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--ui-ink-soft);
 }
 
 .priority-input {
   width: 180px;
+}
+
+@media (max-width: 620px) {
+  .edit-panel {
+    padding: 24px;
+  }
 }
 </style>

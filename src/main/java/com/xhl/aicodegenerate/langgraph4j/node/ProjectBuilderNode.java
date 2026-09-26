@@ -45,6 +45,15 @@ public class ProjectBuilderNode {
                 if (buildSuccess) {
                     buildResultDir = generatedCodeDir + File.separator + "dist";
                     log.info("Vue 项目构建成功，dist 目录: {}", buildResultDir);
+                    try {
+                        com.xhl.aicodegenerate.service.AppScreenshotService screenshotService =
+                                SpringContextUtil.getBean(com.xhl.aicodegenerate.service.AppScreenshotService.class);
+                        if (screenshotService != null && context.getAppId() != null && context.getAppId() > 0) {
+                            screenshotService.captureAppCoverAsync(context.getAppId(), buildResultDir);
+                        }
+                    } catch (Exception e) {
+                        log.warn("工作流构建成功后触发封面截图异常: {}", e.getMessage());
+                    }
                 } else {
                     throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败");
                 }

@@ -8,7 +8,7 @@ const columns = [
   {
     title: 'id',
     dataIndex: 'id',
-    width: 90,
+    width: 190,
   },
   {
     title: '账号',
@@ -190,6 +190,13 @@ onMounted(() => {
 
 <template>
   <div class="user-manage-page">
+    <div class="manage-heading">
+      <div>
+        <h1>用户管理</h1>
+        <p>查看账户、角色与注册信息</p>
+      </div>
+      <span class="manage-count">共 {{ total }} 位用户</span>
+    </div>
     <a-form class="search-form" layout="inline" :model="searchParams" @finish="handleSearch">
       <a-form-item label="账号" name="userAccount">
         <a-input v-model:value="searchParams.userAccount" placeholder="请输入账号" allow-clear />
@@ -211,6 +218,7 @@ onMounted(() => {
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
+      :scroll="{ x: 1120 }"
       @change="doTableChange"
     >
       <template #bodyCell="{ column, record }">
@@ -280,13 +288,13 @@ onMounted(() => {
 
 <style scoped>
 .user-manage-page {
-  padding: 24px;
-  background: #fff;
+  padding: 0;
+  background: var(--ui-surface);
   border-radius: 8px;
 }
 
 .search-form {
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 :deep(.ant-form-inline .ant-form-item) {

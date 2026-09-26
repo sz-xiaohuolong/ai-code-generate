@@ -9,6 +9,7 @@ import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
@@ -79,7 +80,7 @@ public class AiCodeGeneratorServiceFactory {
     public ChatMemoryProvider chatMemoryProvider(ChatMemoryStore chatMemoryStore) {
         // LangChain4j 会根据 @MemoryId 获取 ChatMemory。
         // 这里每个 memoryId 对应一个 MessageWindowChatMemory，底层读写统一走 chatMemoryStore。
-        return memoryId -> dev.langchain4j.memory.chat.MessageWindowChatMemory.builder()
+        return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
                 .maxMessages(CHAT_MEMORY_MAX_MESSAGES)
                 .chatMemoryStore(chatMemoryStore)

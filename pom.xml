@@ -145,8 +145,12 @@
             <version>1.6.0-rc2</version>
         </dependency>
 
-
-
+        <!-- Selenium for Headless Chrome Screenshot -->
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.28.1</version>
+        </dependency>
 
     </dependencies>
 

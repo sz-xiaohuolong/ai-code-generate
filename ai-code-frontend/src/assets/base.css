@@ -1,86 +1,126 @@
-/* color palette from <https://github.com/vuejs/theme> */
 :root {
-  --vt-c-white: #ffffff;
-  --vt-c-white-soft: #f8f8f8;
-  --vt-c-white-mute: #f2f2f2;
-
-  --vt-c-black: #181818;
-  --vt-c-black-soft: #222222;
-  --vt-c-black-mute: #282828;
-
-  --vt-c-indigo: #2c3e50;
-
-  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
-  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
-  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
-  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
-
-  --vt-c-text-light-1: var(--vt-c-indigo);
-  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
-  --vt-c-text-dark-1: var(--vt-c-white);
-  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
-}
-
-/* semantic color variables for this project */
-:root {
-  --color-background: var(--vt-c-white);
-  --color-background-soft: var(--vt-c-white-soft);
-  --color-background-mute: var(--vt-c-white-mute);
-
-  --color-border: var(--vt-c-divider-light-2);
-  --color-border-hover: var(--vt-c-divider-light-1);
-
-  --color-heading: var(--vt-c-text-light-1);
-  --color-text: var(--vt-c-text-light-1);
-
-  --section-gap: 160px;
+  color-scheme: light;
+  --ui-shell: #f8fafc;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #f1f5f9;
+  --ui-surface-hover: #e2e8f0;
+  --ui-line: #e2e8f0;
+  --ui-line-strong: #cbd5e1;
+  --ui-line-subtle: #f1f5f9;
+  --ui-ink: #0f172a;
+  --ui-ink-soft: #475569;
+  --ui-ink-faint: #64748b;
+  --ui-accent: #2563eb;
+  --ui-accent-hover: #1d4ed8;
+  --ui-accent-soft: #eff6ff;
+  --ui-accent-border: #bfdbfe;
+  --ui-radius-sm: 6px;
+  --ui-radius: 8px;
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --ui-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+  --ui-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --ui-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --ui-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --ui-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', sans-serif;
+  font-size: 14px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: var(--vt-c-white);
-    --color-background-soft: var(--vt-c-white-soft);
-    --color-background-mute: var(--vt-c-white-mute);
-
-    --color-border: var(--vt-c-divider-light-2);
-    --color-border-hover: var(--vt-c-divider-light-1);
-
-    --color-heading: var(--vt-c-text-light-1);
-    --color-text: var(--vt-c-text-light-1);
+    color-scheme: dark;
+    --ui-shell: #090d16;
+    --ui-surface: #111827;
+    --ui-surface-muted: #1e293b;
+    --ui-surface-hover: #334155;
+    --ui-line: #1f2937;
+    --ui-line-strong: #374151;
+    --ui-line-subtle: #1e293b;
+    --ui-ink: #f8fafc;
+    --ui-ink-soft: #cbd5e1;
+    --ui-ink-faint: #94a3b8;
+    --ui-accent: #3b82f6;
+    --ui-accent-hover: #60a5fa;
+    --ui-accent-soft: rgba(59, 130, 246, 0.15);
+    --ui-accent-border: rgba(59, 130, 246, 0.35);
   }
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --ui-shell: #090d16;
+  --ui-surface: #111827;
+  --ui-surface-muted: #1e293b;
+  --ui-surface-hover: #334155;
+  --ui-line: #1f2937;
+  --ui-line-strong: #374151;
+  --ui-line-subtle: #1e293b;
+  --ui-ink: #f8fafc;
+  --ui-ink-soft: #cbd5e1;
+  --ui-ink-faint: #94a3b8;
+  --ui-accent: #3b82f6;
+  --ui-accent-hover: #60a5fa;
+  --ui-accent-soft: rgba(59, 130, 246, 0.15);
+  --ui-accent-border: rgba(59, 130, 246, 0.35);
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  min-width: 320px;
   min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  transition:
-    color 0.5s,
-    background-color 0.5s;
-  line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  color: var(--ui-ink);
+  background: var(--ui-shell);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  color: #fff;
+  background: var(--ui-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.05s !important;
+  }
+
+  .pulse-point,
+  .generating-pulse,
+  .generating-line-bar {
+    animation: none !important;
+    opacity: 0.85;
+  }
 }

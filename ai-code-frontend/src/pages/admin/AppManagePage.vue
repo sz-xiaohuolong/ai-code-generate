@@ -28,7 +28,7 @@ const searchParams = reactive<API.AppQueryRequest>({
 })
 
 const columns = [
-  { title: 'id', dataIndex: 'id', width: 90 },
+  { title: 'id', dataIndex: 'id', width: 190 },
   { title: '名称', dataIndex: 'appName', ellipsis: true },
   { title: '封面', dataIndex: 'cover', width: 90 },
   { title: '提示词', dataIndex: 'initPrompt', ellipsis: true },
@@ -156,6 +156,13 @@ onMounted(() => {
 
 <template>
   <div class="app-manage-page">
+    <div class="manage-heading">
+      <div>
+        <h1>应用管理</h1>
+        <p>管理平台应用、封面和精选状态</p>
+      </div>
+      <span class="manage-count">共 {{ total }} 个应用</span>
+    </div>
     <a-form class="search-form" layout="inline" :model="searchParams" @finish="handleSearch">
       <a-form-item label="名称" name="appName">
         <a-input v-model:value="searchParams.appName" placeholder="应用名称" allow-clear />
@@ -196,6 +203,7 @@ onMounted(() => {
       :data-source="dataList"
       :loading="loading"
       :pagination="pagination"
+      :scroll="{ x: 1250 }"
       @change="doTableChange"
     >
       <template #bodyCell="{ column, record }">
@@ -240,13 +248,13 @@ onMounted(() => {
 
 <style scoped>
 .app-manage-page {
-  padding: 24px;
-  background: #fff;
+  padding: 0;
+  background: var(--ui-surface);
   border-radius: 8px;
 }
 
 .search-form {
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .search-select {

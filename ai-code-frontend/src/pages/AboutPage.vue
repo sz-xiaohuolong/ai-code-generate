@@ -61,69 +61,64 @@
 
 <style scoped>
 .about-page {
-  color: #111827;
+  max-width: 980px;
+  margin: 0 auto;
+  color: var(--ui-ink);
 }
 
 .intro-section {
-  padding: 56px 48px;
-  background:
-    radial-gradient(circle at 80% 10%, rgba(19, 194, 194, 0.2), transparent 32%),
-    linear-gradient(135deg, #ffffff 0%, #effdfb 48%, #eef5ff 100%);
-  border-radius: 8px;
+  padding: 36px 0 42px;
+  border-bottom: 1px solid var(--ui-line);
 }
 
 .intro-section h1 {
-  margin: 0 0 16px;
-  font-size: 34px;
-  font-weight: 800;
+  margin: 0 0 18px;
+  font-size: 36px;
+  font-weight: 700;
 }
 
 .intro-section p {
   max-width: 760px;
   margin: 0;
-  color: #4b5563;
-  font-size: 17px;
-  line-height: 1.9;
+  color: var(--ui-ink-soft);
+  font-size: 16px;
+  line-height: 1.85;
 }
 
 .content-section {
-  margin-top: 24px;
-  padding: 32px;
-  background: #fff;
-  border-radius: 8px;
+  padding: 40px 0;
+  border-bottom: 1px solid var(--ui-line);
 }
 
 .content-section h2 {
-  margin: 0 0 20px;
-  font-size: 24px;
-  font-weight: 800;
+  margin: 0 0 26px;
+  font-size: 21px;
+  font-weight: 700;
 }
 
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0 36px;
 }
 
 .feature-item,
 .role-list > div {
-  padding: 20px;
-  background: #f8fafc;
-  border: 1px solid #edf0f5;
-  border-radius: 8px;
+  padding: 18px 0;
+  border-top: 1px solid var(--ui-line);
 }
 
 .feature-item h3,
 .role-list h3 {
   margin: 0 0 8px;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .feature-item p,
 .role-list p {
   margin: 0;
-  color: #6b7280;
+  color: var(--ui-ink-soft);
   line-height: 1.7;
 }
 
@@ -134,9 +129,12 @@
 }
 
 @media (max-width: 768px) {
-  .intro-section,
-  .content-section {
-    padding: 24px;
+  .intro-section {
+    padding: 18px 0 32px;
+  }
+
+  .intro-section h1 {
+    font-size: 28px;
   }
 
   .feature-grid,

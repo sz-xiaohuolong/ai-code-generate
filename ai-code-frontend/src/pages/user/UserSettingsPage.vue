@@ -102,39 +102,48 @@ onMounted(async () => {
 .settings-page {
   display: flex;
   justify-content: center;
-  padding: 24px 16px;
+  padding: 32px 16px;
 }
 
 .settings-panel {
   width: 100%;
-  max-width: 560px;
-  padding: 32px;
-  background: #fff;
+  max-width: 680px;
+  padding: 36px 40px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
   border-radius: 8px;
 }
 
 .page-title {
-  margin: 0 0 24px;
+  margin: 0 0 22px;
   font-size: 24px;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--ui-ink);
 }
 
 .profile-preview {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--ui-line);
 }
 
 .profile-name {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--ui-ink);
 }
 
 .profile-account {
   margin-top: 4px;
-  color: #666;
+  color: var(--ui-ink-soft);
+}
+
+@media (max-width: 620px) {
+  .settings-panel {
+    padding: 24px;
+  }
 }
 </style>

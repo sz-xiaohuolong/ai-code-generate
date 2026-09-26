@@ -104,28 +104,31 @@ const handleSubmit = async () => {
 .user-page {
   display: flex;
   justify-content: center;
+  align-items: center;
+  min-height: calc(100dvh - 180px);
   padding: 48px 16px;
 }
 
 .form-panel {
   width: 100%;
-  max-width: 420px;
-  padding: 32px;
-  background: #fff;
+  max-width: 410px;
+  padding: 36px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
   border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 21, 41, 0.08);
 }
 
 .form-title {
-  margin: 0 0 24px;
-  text-align: center;
-  font-size: 24px;
-  font-weight: 600;
-  color: #1f2937;
+  margin: 0 0 30px;
+  font-size: 25px;
+  font-weight: 700;
+  color: var(--ui-ink);
 }
 
 .form-extra {
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
   text-align: center;
-  color: #666;
+  color: var(--ui-ink-soft);
 }
 </style>

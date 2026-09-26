@@ -25,9 +25,13 @@ public class StaticResourceController {
     // 应用部署根目录
     private static final String DEPLOY_ROOT_DIR = AppConstant.CODE_DEPLOY_ROOT_DIR;
 
+    // 应用封面根目录
+    private static final String COVER_ROOT_DIR = AppConstant.COVER_OUTPUT_ROOT_DIR;
+
     /**
      * 提供静态资源访问，支持目录重定向
      * 访问格式：http://localhost:8123/api/static/{deployKey}[/{fileName}]
+     * 封面格式：http://localhost:8123/api/static/cover/{fileName}
      */
     @GetMapping("/{deployKey}/**")
     public ResponseEntity<Resource> serveStaticResource(
@@ -37,6 +41,19 @@ public class StaticResourceController {
             // 获取资源路径
             String resourcePath = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
             resourcePath = resourcePath.substring(("/static/" + deployKey).length());
+
+            // 封面图片路由支持：/static/cover/{fileName}
+            if ("cover".equals(deployKey)) {
+                File file = new File(COVER_ROOT_DIR + resourcePath);
+                if (!file.exists()) {
+                    return ResponseEntity.notFound().build();
+                }
+                Resource resource = new FileSystemResource(file);
+                return ResponseEntity.ok()
+                        .header("Content-Type", getContentTypeWithCharset(file.getAbsolutePath()))
+                        .body(resource);
+            }
+
             // 如果是目录访问（不带斜杠），重定向到带斜杠的URL
             if (resourcePath.isEmpty()) {
                 HttpHeaders headers = new HttpHeaders();

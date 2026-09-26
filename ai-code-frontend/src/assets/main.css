@@ -1,20 +1,203 @@
 @import './base.css';
 
 #app {
-  width: 100%;
   min-height: 100vh;
-  font-weight: normal;
 }
 
-a,
-.green {
+a {
+  color: var(--ui-accent);
   text-decoration: none;
-  color: #1677ff;
-  transition: 0.4s;
 }
 
-@media (min-width: 1024px) {
-  #app {
-    padding: 0;
-  }
+a:hover {
+  color: var(--ui-accent-hover);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin-top: 0;
+}
+
+.ant-btn {
+  box-shadow: none;
+  font-weight: 500;
+  border-radius: var(--ui-radius-sm);
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ant-btn-primary {
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.18), 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.24), 0 2px 6px rgba(37, 99, 235, 0.16);
+  transform: translateY(-1px);
+}
+
+.ant-btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.ant-btn-default {
+  color: var(--ui-ink);
+  border-color: var(--ui-line-strong);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.ant-btn-default:not(:disabled):hover {
+  background: var(--ui-surface-muted);
+  border-color: var(--ui-ink-faint);
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-select-selector {
+  color: var(--ui-ink);
+  border-color: var(--ui-line) !important;
+  border-radius: var(--ui-radius-sm) !important;
+  box-shadow: none !important;
+  transition: all 160ms ease !important;
+}
+
+.ant-input::placeholder,
+.ant-input-affix-wrapper input::placeholder,
+.ant-input-number-input::placeholder {
+  color: var(--ui-ink-faint);
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper-focused,
+.ant-input-number-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--ui-accent) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.ant-form-item-label > label {
+  color: var(--ui-ink-soft) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table {
+  color: var(--ui-ink);
+  background: transparent;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface-muted);
+  border-bottom-color: var(--ui-line);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom-color: var(--ui-line);
+  font-size: 13px;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: var(--ui-surface-muted) !important;
+}
+
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin: 16px 20px;
+}
+
+.ant-modal-content,
+.ant-modal-content,
+.ant-dropdown-menu {
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius) !important;
+  box-shadow: var(--ui-shadow-lg) !important;
+}
+
+.ant-pagination-item-active {
+  border-color: var(--ui-accent);
+}
+
+.user-manage-page,
+.app-manage-page,
+.chat-history-manage-page {
+  overflow: hidden;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+}
+
+.manage-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  min-height: 80px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.manage-heading h1 {
+  margin: 0 0 4px;
+  color: var(--ui-ink);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.manage-heading p {
+  margin: 0;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
+}
+
+.manage-count {
+  flex: none;
+  color: var(--ui-ink-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-manage-page .ant-table-tbody > tr > td:first-child,
+.app-manage-page .ant-table-tbody > tr > td:first-child,
+.chat-history-manage-page .ant-table-tbody > tr > td:first-child {
+  font-family: var(--ui-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.user-manage-page .search-form,
+.app-manage-page .search-form,
+.chat-history-manage-page .search-form {
+  padding: 18px 20px 2px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.user-manage-page .ant-table-wrapper,
+.app-manage-page .ant-table-wrapper,
+.chat-history-manage-page .ant-table-wrapper {
+  overflow-x: auto;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--ui-line-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-ink-soft);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }

@@ -23,4 +23,14 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'ant-design-vue': ['ant-design-vue', '@ant-design/icons-vue'],
+          'vue-vendor': ['vue', 'vue-router', 'pinia', 'axios'],
+        },
+      },
+    },
+  },
 })

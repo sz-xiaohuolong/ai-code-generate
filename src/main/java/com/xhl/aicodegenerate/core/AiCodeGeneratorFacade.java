@@ -44,6 +44,9 @@ public class AiCodeGeneratorFacade {
     @Resource
     private VueProjectBuilder vueProjectBuilder;
 
+    @Resource
+    private com.xhl.aicodegenerate.service.AppScreenshotService appScreenshotService;
+
     /**
      * 统一入口：根据类型生成并保存代码
      *
@@ -56,7 +59,7 @@ public class AiCodeGeneratorFacade {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
-        return switch (codeGenTypeEnum) {
+        File savedDir = switch (codeGenTypeEnum) {
             case HTML -> {
                 try {
                     HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(memoryId, userMessage);
@@ -88,6 +91,8 @@ public class AiCodeGeneratorFacade {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
             }
         };
+        triggerScreenshot(memoryId.getAppId(), codeGenTypeEnum, savedDir);
+        return savedDir;
     }
 
     /**
@@ -148,8 +153,10 @@ public class AiCodeGeneratorFacade {
                         if (completed.compareAndSet(false, true)) {
                             try {
                                 buildVueProject(appId);
+                                String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
+                                triggerScreenshot(appId, CodeGenTypeEnum.VUE_PROJECT, new File(projectPath));
                             } catch (Exception e) {
-                                log.error("Vue 项目同步构建异常: {}", e.getMessage(), e);
+                                log.error("Vue 项目同步构建或触发封面截图异常: {}", e.getMessage(), e);
                             }
                             sink.complete();
                         }
@@ -224,10 +231,25 @@ public class AiCodeGeneratorFacade {
                 // 使用执行器保存代码
                 File savedDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
                 log.info("保存成功，路径为：" + savedDir.getAbsolutePath());
+                triggerScreenshot(appId, codeGenType, savedDir);
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());
             }
         });
+    }
+
+    /**
+     * 触发异步应用封面截图
+     */
+    private void triggerScreenshot(Long appId, CodeGenTypeEnum codeGenType, File savedDir) {
+        if (appId == null || appId <= 0 || savedDir == null || !savedDir.exists()) {
+            return;
+        }
+        try {
+            appScreenshotService.captureAppCoverAsync(appId, savedDir.getAbsolutePath());
+        } catch (Exception e) {
+            log.warn("触发应用封面截图异常: appId={}, error={}", appId, e.getMessage());
+        }
     }
 
 

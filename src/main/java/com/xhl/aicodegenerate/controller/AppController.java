@@ -42,11 +42,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 应用 控制层。
  *
  * @author <a href="https://github.com/sz-xiaohuolong">不会喷火的小火龙</a>
  */
+@Slf4j
 @RestController
 @RequestMapping("/app")
 public class AppController {
@@ -292,6 +295,7 @@ public class AppController {
     }
 
     private ServerSentEvent<String> buildSseBusinessError(Throwable error) {
+        log.error("SSE stream error occurred in chatToGenCode: ", error);
         Throwable cause = findRelevantCause(error);
         int code;
         String message;

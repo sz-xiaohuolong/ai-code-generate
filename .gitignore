@@ -35,3 +35,7 @@ build/
 ### CUSTOM ###
 application-local.yml
 tmp
+/.evidence/
+.DS_Store
+**/.DS_Store
+.impeccable/

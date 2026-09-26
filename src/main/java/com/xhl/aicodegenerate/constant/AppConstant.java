@@ -31,4 +31,9 @@ public interface AppConstant {
             System.getenv().getOrDefault("APP_DEPLOY_HOST", "http://localhost")
     );
 
+    /**
+     * 应用封面目录
+     */
+    String COVER_OUTPUT_ROOT_DIR = System.getProperty("user.dir") + "/tmp/cover";
+
 }
