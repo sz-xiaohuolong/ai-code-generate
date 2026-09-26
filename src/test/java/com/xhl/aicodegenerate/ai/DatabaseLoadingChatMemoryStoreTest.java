@@ -79,6 +79,28 @@ class DatabaseLoadingChatMemoryStoreTest {
         verifyNoInteractions(chatHistoryMapper);
     }
 
+    @Test
+    void getMessagesShouldDowngradeAiMessageWhenToolRequestsAreUnfulfilled() {
+        ChatHistoryMapper chatHistoryMapper = mock(ChatHistoryMapper.class);
+        ToolExecutionRequest request = ToolExecutionRequest.builder()
+                .id("call_unfulfilled")
+                .name("writeFile")
+                .arguments("{\"relativeFilePath\":\"App.vue\",\"content\":\"<template></template>\"}")
+                .build();
+        List<ChatMessage> redisMessages = List.of(
+                UserMessage.from("生成 Vue 项目"),
+                AiMessage.from("开始写文件", List.of(request))
+        );
+        InMemoryChatMemoryStore delegate = new InMemoryChatMemoryStore(redisMessages);
+        DatabaseLoadingChatMemoryStore store = new DatabaseLoadingChatMemoryStore(delegate, chatHistoryMapper);
+
+        List<ChatMessage> messages = store.getMessages(new Object());
+
+        assertEquals(List.of(UserMessage.from("生成 Vue 项目"), AiMessage.from("开始写文件")), messages);
+        assertEquals(messages, delegate.getMessages(new Object()));
+        verifyNoInteractions(chatHistoryMapper);
+    }
+
     private static class InMemoryChatMemoryStore implements ChatMemoryStore {
 
         private List<ChatMessage> messages;

@@ -46,7 +46,7 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
     public List<ChatMessage> getMessages(Object memoryId) {
         // LangChain4j 每次构造 prompt 前都会读取 ChatMemory；先取 Redis 缓存，降低 DB 压力。
         List<ChatMessage> rawRedisMessages = delegate.getMessages(memoryId);
-        List<ChatMessage> redisMessages = removeOrphanToolResultMessages(rawRedisMessages);
+        List<ChatMessage> redisMessages = sanitizeToolMessages(rawRedisMessages);
         if (!redisMessages.equals(rawRedisMessages)) {
             delegate.updateMessages(memoryId, redisMessages);
         }
@@ -215,30 +215,59 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
         return false;
     }
 
-    private List<ChatMessage> removeOrphanToolResultMessages(List<ChatMessage> messages) {
+    private List<ChatMessage> sanitizeToolMessages(List<ChatMessage> messages) {
         if (CollUtil.isEmpty(messages)) {
             return new ArrayList<>();
         }
         List<ChatMessage> result = new ArrayList<>();
-        Set<String> pendingToolRequestIds = new HashSet<>();
+        int i = 0;
+        int n = messages.size();
         boolean changed = false;
-        for (ChatMessage message : messages) {
-            if (message instanceof ToolExecutionResultMessage toolExecutionResultMessage) {
-                if (pendingToolRequestIds.remove(toolExecutionResultMessage.id())) {
-                    result.add(message);
-                } else {
-                    changed = true;
+
+        while (i < n) {
+            ChatMessage current = messages.get(i);
+
+            // 1. 如果是带有工具调用请求的 AI 消息
+            if (current instanceof AiMessage aiMessage && aiMessage.hasToolExecutionRequests()) {
+                Set<String> requiredToolIds = getToolRequestIds(aiMessage);
+                List<ToolExecutionResultMessage> matchedResults = new ArrayList<>();
+                int j = i + 1;
+
+                // 收集紧跟其后的所有 ToolExecutionResultMessage
+                while (j < n && messages.get(j) instanceof ToolExecutionResultMessage toolMsg) {
+                    if (requiredToolIds.remove(toolMsg.id())) {
+                        matchedResults.add(toolMsg);
+                    }
+                    j++;
                 }
+
+                // 如果所有的 tool call 都得到了对应的 tool message，说明该工具调用链条完整闭合
+                if (requiredToolIds.isEmpty()) {
+                    result.add(aiMessage);
+                    result.addAll(matchedResults);
+                } else {
+                    // 工具调用链条破损（未全部闭合）：降级为纯文本或丢弃，避免 OpenAI 协议报 400
+                    changed = true;
+                    if (StrUtil.isNotBlank(aiMessage.text())) {
+                        result.add(AiMessage.from(aiMessage.text()));
+                    }
+                }
+                i = j;
                 continue;
             }
-            if (message instanceof AiMessage aiMessage && aiMessage.hasToolExecutionRequests()) {
-                pendingToolRequestIds = getToolRequestIds(aiMessage);
-                result.add(message);
+
+            // 2. 如果是无主/孤立的 ToolExecutionResultMessage，直接丢弃
+            if (current instanceof ToolExecutionResultMessage) {
+                changed = true;
+                i++;
                 continue;
             }
-            pendingToolRequestIds.clear();
-            result.add(message);
+
+            // 3. 其他消息正常保留
+            result.add(current);
+            i++;
         }
+
         return changed ? result : messages;
     }
 
