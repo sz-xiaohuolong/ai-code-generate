@@ -13,7 +13,7 @@
 - Proposed Design: [docs/vibe/releases/app-cover-screenshot/PROPOSED_DESIGN.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/vibe/releases/app-cover-screenshot/PROPOSED_DESIGN.md)
 - Implementation Plan: [docs/vibe/releases/app-cover-screenshot/IMPLEMENTATION_PLAN.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/vibe/releases/app-cover-screenshot/IMPLEMENTATION_PLAN.md)
 - Verification Report: [docs/vibe/releases/app-cover-screenshot/VERIFICATION.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/vibe/releases/app-cover-screenshot/VERIFICATION.md)
-- Last Stable Commit/Artifact: `22b39c2` (`feat：更新工具管理部分代码与注释`)
+- Last Stable Commit/Artifact: `c54db6a` (`feat: 实现基于 Selenium 的应用真实封面异步截图与 Vibe 治理规范初始化`)
 - Last Updated: `2026-09-26`
 
 ## 任务状态
