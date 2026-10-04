@@ -34,8 +34,9 @@
 
 | Scope | Command/Flow | Result | Evidence | Time |
 |---|---|---|---|---|
-| 截图核心服务 | `./mvnw test -Dtest=AppScreenshotServiceTest` | `PASS` | Chrome 153 Headless 3.5s 捕获并落盘 `tmp/cover/app_999999.png` | 2026-09-26 19:56 |
-| 静态资源路由 | `./mvnw test -Dtest=StaticResourceControllerTest` | `PASS` | `/api/static/cover/**` 返回 HTTP 200 及 `image/png` | 2026-09-26 19:56 |
+| 截图核心服务 | `./mvnw test -Dtest=AppScreenshotServiceTest` | `PASS` | Chrome Headless 捕获并落盘 `tmp/cover/app_999999.png` | 2026-10-04 21:47 |
+| 静态资源路由 | `./mvnw test -Dtest=StaticResourceControllerTest` | `PASS` | `/api/static/cover/**` 返回 HTTP 200 及 `image/png` | 2026-10-04 21:47 |
+| Vue SPA 截图修复 | `HTTP preview mapping & WebDriverWait` | `PASS` | 解决 file:// 协议 CORS 阻塞 ES Module 导致白屏问题，app_464348744725446656.png 成功输出 251KB 完整页面截图 | 2026-10-04 21:47 |
 | 前端类型检查 | `cd ai-code-frontend && npm run type-check` | `PASS` | `AppCard.vue` 真实封面加载与 `@error` 线框兜底 0 错误 | 2026-09-26 19:59 |
 
 ## 风险、阻塞与待决定

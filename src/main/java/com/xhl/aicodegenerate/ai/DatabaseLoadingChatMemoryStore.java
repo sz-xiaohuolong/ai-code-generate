@@ -237,19 +237,27 @@ public class DatabaseLoadingChatMemoryStore implements ChatMemoryStore {
                 while (j < n && messages.get(j) instanceof ToolExecutionResultMessage toolMsg) {
                     if (requiredToolIds.remove(toolMsg.id())) {
                         matchedResults.add(toolMsg);
+                    } else {
+                        changed = true;
                     }
                     j++;
                 }
 
-                // 如果所有的 tool call 都得到了对应的 tool message，说明该工具调用链条完整闭合
-                if (requiredToolIds.isEmpty()) {
+                // 如果所有的 tool call 都得到了对应的 tool message，说明该工具调用链条完整闭合；
+                // 或者 j == n，说明当前正处于流式工具调用的中间执行态（工具正逐个返回并写入 ChatMemory）。
+                // 此时绝不能提前降级或抹掉 AiMessage 的 tool calls 和 thinking，否则会导致下一轮请求缺少 reasoning_content 或报 400。
+                if (requiredToolIds.isEmpty() || j == n) {
                     result.add(aiMessage);
                     result.addAll(matchedResults);
                 } else {
-                    // 工具调用链条破损（未全部闭合）：降级为纯文本或丢弃，避免 OpenAI 协议报 400
+                    // 工具调用链条破损（未全部闭合且后面已有后续用户/系统消息，说明是历史上未正常结束的孤立调用）：
+                    // 降级保留文本与 thinking，丢弃失效的 tool calls，避免 OpenAI 协议报 400
                     changed = true;
-                    if (StrUtil.isNotBlank(aiMessage.text())) {
-                        result.add(AiMessage.from(aiMessage.text()));
+                    if (StrUtil.isNotBlank(aiMessage.text()) || StrUtil.isNotBlank(aiMessage.thinking())) {
+                        result.add(AiMessage.builder()
+                                .text(StrUtil.nullToEmpty(aiMessage.text()))
+                                .thinking(aiMessage.thinking())
+                                .build());
                     }
                 }
                 i = j;

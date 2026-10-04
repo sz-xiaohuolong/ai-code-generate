@@ -42,6 +42,12 @@ public class AppScreenshotServiceImpl implements AppScreenshotService {
     @Autowired(required = false)
     private CacheManager cacheManager;
 
+    @org.springframework.beans.factory.annotation.Value("${server.port:8123}")
+    private int serverPort = 8123;
+
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:/api}")
+    private String contextPath = "/api";
+
     /**
      * 单独的截图线程池，最大并发 2，避免并发启动过多 Chrome 造成系统 OOM
      */
@@ -86,9 +92,28 @@ public class AppScreenshotServiceImpl implements AppScreenshotService {
             driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(5));
             driver.get(finalUrl);
 
-            // 适当等待首屏 DOM 与 JS 动态渲染完成
+            // 针对现代前端 SPA (Vue/React)，等待 #app 或 body 内部挂载完成
             try {
-                Thread.sleep(1500);
+                org.openqa.selenium.support.ui.WebDriverWait wait =
+                        new org.openqa.selenium.support.ui.WebDriverWait(driver, Duration.ofSeconds(4));
+                wait.until(webDriver -> {
+                    try {
+                        Object result = ((org.openqa.selenium.JavascriptExecutor) webDriver).executeScript(
+                                "var app = document.getElementById('app') || document.getElementById('root'); " +
+                                "if (app && app.children.length > 0) return true; " +
+                                "return document.body && document.body.innerText.trim().length > 0;"
+                        );
+                        return Boolean.TRUE.equals(result);
+                    } catch (Exception e) {
+                        return true;
+                    }
+                });
+            } catch (Exception ignored) {
+            }
+
+            // 适当缓冲动画与图片动态渲染
+            try {
+                Thread.sleep(1200);
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
@@ -107,6 +132,15 @@ public class AppScreenshotServiceImpl implements AppScreenshotService {
 
             TakesScreenshot ts = (TakesScreenshot) driver;
             byte[] screenshotBytes = ts.getScreenshotAs(OutputType.BYTES);
+
+            // 若截图字节过小（如小于 5000 字节，通常属于首屏未渲染完毕的空白），二次等待重试截取一次
+            if (screenshotBytes != null && screenshotBytes.length < 5000) {
+                try {
+                    Thread.sleep(1500);
+                    screenshotBytes = ts.getScreenshotAs(OutputType.BYTES);
+                } catch (Exception ignored) {
+                }
+            }
 
             File coverDir = new File(AppConstant.COVER_OUTPUT_ROOT_DIR);
             if (!coverDir.exists()) {
@@ -152,16 +186,60 @@ public class AppScreenshotServiceImpl implements AppScreenshotService {
     }
 
     /**
-     * 规范化访问 URL，支持 HTTP(S)、file:// 协议及本地目录自动查找 index.html
+     * 规范化访问 URL，优先将本地目录映射为本地 HTTP 预览服务（防止 file:// 协议下 ES Module 触发 CORS 导致白屏），
+     * 兜底支持 HTTP(S)、file:// 协议。
      */
     private String normalizeTargetUrl(String targetUrl) {
         if (StrUtil.isBlank(targetUrl)) {
             return null;
         }
-        if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://") || targetUrl.startsWith("file://")) {
+        if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
             return targetUrl;
         }
+
         File file = new File(targetUrl);
+        String absPath = file.getAbsolutePath();
+
+        String normalizedContextPath = StrUtil.blankToDefault(contextPath, "");
+        if (StrUtil.isNotBlank(normalizedContextPath) && !normalizedContextPath.startsWith("/")) {
+            normalizedContextPath = "/" + normalizedContextPath;
+        }
+        if (normalizedContextPath.endsWith("/")) {
+            normalizedContextPath = normalizedContextPath.substring(0, normalizedContextPath.length() - 1);
+        }
+
+        // 1. 如果路径位于应用部署目录 CODE_DEPLOY_ROOT_DIR 内
+        String deployRoot = new File(AppConstant.CODE_DEPLOY_ROOT_DIR).getAbsolutePath();
+        if (absPath.startsWith(deployRoot)) {
+            String relative = absPath.substring(deployRoot.length()).replace('\\', '/');
+            if (relative.startsWith("/")) {
+                relative = relative.substring(1);
+            }
+            String deployKey = relative.contains("/") ? relative.substring(0, relative.indexOf('/')) : relative;
+            if (StrUtil.isNotBlank(deployKey)) {
+                return String.format("http://localhost:%d%s/static/%s/", serverPort, normalizedContextPath, deployKey);
+            }
+        }
+
+        // 2. 如果路径位于应用生成目录 CODE_OUTPUT_ROOT_DIR 内
+        String outputRoot = new File(AppConstant.CODE_OUTPUT_ROOT_DIR).getAbsolutePath();
+        if (absPath.startsWith(outputRoot)) {
+            String relative = absPath.substring(outputRoot.length()).replace('\\', '/');
+            if (relative.startsWith("/")) {
+                relative = relative.substring(1);
+            }
+            String dirKey = relative.contains("/") ? relative.substring(0, relative.indexOf('/')) : relative;
+            if (StrUtil.isNotBlank(dirKey)) {
+                return String.format("http://localhost:%d%s/static/%s/", serverPort, normalizedContextPath, dirKey);
+            }
+        }
+
+        // 3. 如果已经是 file:// 协议
+        if (targetUrl.startsWith("file://")) {
+            return targetUrl;
+        }
+
+        // 4. 其他本地文件或临时文件
         if (file.isDirectory()) {
             File vueDist = new File(file, "dist/index.html");
             if (vueDist.exists()) {
@@ -191,6 +269,8 @@ public class AppScreenshotServiceImpl implements AppScreenshotService {
         options.addArguments("--hide-scrollbars");
         options.addArguments("--disable-extensions");
         options.addArguments("--disable-blink-features=AutomationControlled");
+        options.addArguments("--allow-file-access-from-files");
+        options.addArguments("--disable-web-security");
 
         // 优先检查用户自定义路径
         String customChromeBinary = System.getProperty("chrome.binary.path", System.getenv("CHROME_BINARY_PATH"));

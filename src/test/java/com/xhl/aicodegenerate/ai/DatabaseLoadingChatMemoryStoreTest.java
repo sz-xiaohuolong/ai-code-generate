@@ -80,24 +80,66 @@ class DatabaseLoadingChatMemoryStoreTest {
     }
 
     @Test
-    void getMessagesShouldDowngradeAiMessageWhenToolRequestsAreUnfulfilled() {
+    void getMessagesShouldKeepInFlightToolExecutionWhenAtTail() {
         ChatHistoryMapper chatHistoryMapper = mock(ChatHistoryMapper.class);
         ToolExecutionRequest request = ToolExecutionRequest.builder()
-                .id("call_unfulfilled")
+                .id("call_in_flight")
                 .name("writeFile")
                 .arguments("{\"relativeFilePath\":\"App.vue\",\"content\":\"<template></template>\"}")
                 .build();
+        AiMessage aiMessage = AiMessage.builder()
+                .text("开始写文件")
+                .thinking("思考中：准备生成 App.vue")
+                .toolExecutionRequests(List.of(request))
+                .build();
         List<ChatMessage> redisMessages = List.of(
                 UserMessage.from("生成 Vue 项目"),
-                AiMessage.from("开始写文件", List.of(request))
+                aiMessage
         );
         InMemoryChatMemoryStore delegate = new InMemoryChatMemoryStore(redisMessages);
         DatabaseLoadingChatMemoryStore store = new DatabaseLoadingChatMemoryStore(delegate, chatHistoryMapper);
 
         List<ChatMessage> messages = store.getMessages(new Object());
 
-        assertEquals(List.of(UserMessage.from("生成 Vue 项目"), AiMessage.from("开始写文件")), messages);
-        assertEquals(messages, delegate.getMessages(new Object()));
+        assertEquals(redisMessages, messages);
+        assertEquals(redisMessages, delegate.getMessages(new Object()));
+        verifyNoInteractions(chatHistoryMapper);
+    }
+
+    @Test
+    void getMessagesShouldDowngradeAiMessageWhenToolRequestsAreUnfulfilledAndFollowedByMessage() {
+        ChatHistoryMapper chatHistoryMapper = mock(ChatHistoryMapper.class);
+        ToolExecutionRequest request = ToolExecutionRequest.builder()
+                .id("call_unfulfilled")
+                .name("writeFile")
+                .arguments("{\"relativeFilePath\":\"App.vue\",\"content\":\"<template></template>\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.builder()
+                .text("开始写文件")
+                .thinking("思考中：准备生成 App.vue")
+                .toolExecutionRequests(List.of(request))
+                .build();
+        List<ChatMessage> redisMessages = List.of(
+                UserMessage.from("生成 Vue 项目"),
+                aiMessage,
+                UserMessage.from("重新生成一个计数器")
+        );
+        InMemoryChatMemoryStore delegate = new InMemoryChatMemoryStore(redisMessages);
+        DatabaseLoadingChatMemoryStore store = new DatabaseLoadingChatMemoryStore(delegate, chatHistoryMapper);
+
+        List<ChatMessage> messages = store.getMessages(new Object());
+
+        AiMessage expectedAiMessage = AiMessage.builder()
+                .text("开始写文件")
+                .thinking("思考中：准备生成 App.vue")
+                .build();
+        List<ChatMessage> expectedMessages = List.of(
+                UserMessage.from("生成 Vue 项目"),
+                expectedAiMessage,
+                UserMessage.from("重新生成一个计数器")
+        );
+        assertEquals(expectedMessages, messages);
+        assertEquals(expectedMessages, delegate.getMessages(new Object()));
         verifyNoInteractions(chatHistoryMapper);
     }
 

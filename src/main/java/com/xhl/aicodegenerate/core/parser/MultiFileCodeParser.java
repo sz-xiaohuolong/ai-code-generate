@@ -11,9 +11,9 @@ import java.util.regex.Pattern;
  */
 public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
 
-    private static final Pattern HTML_CODE_PATTERN = Pattern.compile("```html\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-    private static final Pattern CSS_CODE_PATTERN = Pattern.compile("```css\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-    private static final Pattern JS_CODE_PATTERN = Pattern.compile("```(?:js|javascript)\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+    private static final Pattern HTML_CODE_PATTERN = Pattern.compile("[ \\t]*```(?:html|htm|index\\.html)[^\\n]*\\n([\\s\\S]*?)(?:```|$)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CSS_CODE_PATTERN = Pattern.compile("[ \\t]*```(?:css|style|stylesheet|style\\.css)[^\\n]*\\n([\\s\\S]*?)(?:```|$)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JS_CODE_PATTERN = Pattern.compile("[ \\t]*```(?:js|javascript|script\\.js)[^\\n]*\\n([\\s\\S]*?)(?:```|$)", Pattern.CASE_INSENSITIVE);
     private static final Pattern HTML_DOCUMENT_PATTERN = Pattern.compile("(<!DOCTYPE\\s+html[\\s\\S]*?</html>|<html[\\s\\S]*?</html>)", Pattern.CASE_INSENSITIVE);
     private static final Pattern STYLE_TAG_PATTERN = Pattern.compile("<style[^>]*>([\\s\\S]*?)</style>", Pattern.CASE_INSENSITIVE);
     private static final Pattern INLINE_SCRIPT_TAG_PATTERN = Pattern.compile("<script(?![^>]*\\bsrc\\s*=)[^>]*>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
@@ -42,22 +42,40 @@ public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
                 htmlCode = addExternalReferences(inlineAssets.htmlCode(), !isBlank(cssCode), !isBlank(jsCode));
             }
         }
+        // 若在 HTML 代码块中未提取到，且全文包含独立 <style> / <script> 标签，兜底提取
+        if (isBlank(cssCode)) {
+            cssCode = extractAllByPattern(codeContent, STYLE_TAG_PATTERN);
+        }
+        if (isBlank(jsCode)) {
+            jsCode = extractAllByPattern(codeContent, INLINE_SCRIPT_TAG_PATTERN);
+        }
         if (!isBlank(htmlCode)) {
             htmlCode = addExternalReferences(htmlCode, !isBlank(cssCode), !isBlank(jsCode));
         }
         // 设置HTML代码
         if (!isBlank(htmlCode)) {
-            result.setHtmlCode(htmlCode.trim());
+            result.setHtmlCode(cleanExtractedCode(htmlCode));
         }
         // 设置CSS代码
         if (!isBlank(cssCode)) {
-            result.setCssCode(cssCode.trim());
+            result.setCssCode(cleanExtractedCode(cssCode));
         }
         // 设置JS代码
         if (!isBlank(jsCode)) {
-            result.setJsCode(jsCode.trim());
+            result.setJsCode(cleanExtractedCode(jsCode));
         }
         return result;
+    }
+
+    private String cleanExtractedCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String trimmed = code.trim();
+        if (trimmed.endsWith("```")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 3).trim();
+        }
+        return trimmed;
     }
 
     /**

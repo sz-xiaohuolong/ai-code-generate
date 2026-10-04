@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  */
 public class PromptSafetyInputGuardrail implements InputGuardrail {
 
-    private static final int MAX_PROMPT_LENGTH = 1_000;
+    private static final int MAX_PROMPT_LENGTH = 20_000;
 
     private static final List<String> SENSITIVE_WORDS = List.of(
             "忽略之前的指令", "ignore previous instructions", "ignore above",

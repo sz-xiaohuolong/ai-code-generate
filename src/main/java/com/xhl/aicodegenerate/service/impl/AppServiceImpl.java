@@ -175,6 +175,19 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         AppVO appVO = new AppVO();
         BeanUtil.copyProperties(app, appVO);
+        if (StrUtil.isBlank(app.getCodeGenType()) && StrUtil.isNotBlank(app.getInitPrompt())) {
+            try {
+                CodeGenTypeEnum deduced = aiCodeGenTypeRoutingService.routeCodeGenType(app.getInitPrompt());
+                if (deduced != null) {
+                    app.setCodeGenType(deduced.getValue());
+                    this.updateById(app);
+                    appVO.setCodeGenType(deduced.getValue());
+                    log.info("应用 ID: {} codeGenType 为空，已自动推断并修复为: {}", app.getId(), deduced.getValue());
+                }
+            } catch (Exception e) {
+                log.warn("自动补全应用 codeGenType 异常: {}", e.getMessage());
+            }
+        }
         Long userId = app.getUserId();
         if (ObjUtil.isNotEmpty(userId)) {
             User user = userService.getById(userId);
@@ -225,7 +238,16 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
+            // 自愈兜底：若应用由于历史异常或未设置类型导致 codeGenType 为空，通过 initPrompt / 当前用户输入动态推断并持久化修复
+            String routingPrompt = StrUtil.isNotBlank(app.getInitPrompt()) ? app.getInitPrompt() : message;
+            codeGenTypeEnum = aiCodeGenTypeRoutingService.routeCodeGenType(routingPrompt);
+            if (codeGenTypeEnum != null) {
+                app.setCodeGenType(codeGenTypeEnum.getValue());
+                this.updateById(app);
+                log.info("应用 ID: {} codeGenType 为空，已自动推断并修复为: {}", appId, codeGenTypeEnum.getValue());
+            } else {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
+            }
         }
         // 5. 先初始化 app 级别对话记忆。
         // 注意：必须在调用 AI 前初始化，避免本次 @UserMessage 被数据库恢复逻辑重复加载。

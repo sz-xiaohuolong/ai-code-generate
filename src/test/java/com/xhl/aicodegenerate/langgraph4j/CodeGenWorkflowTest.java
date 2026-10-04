@@ -4,6 +4,7 @@ import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.entity.App;
 import com.xhl.aicodegenerate.entity.User;
 import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
+import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import com.xhl.aicodegenerate.service.AppService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Assertions;
@@ -81,35 +82,49 @@ class CodeGenWorkflowTest {
     }
 
     /**
-     * 测试辅助方法：不新增接口，只通过测试代码把工作流产物注册成一个普通 App。
-     * 这样前端继续使用“我的应用列表 / 应用详情 / 部署预览”等现有接口就能看到工作流生成的项目。
+     * 测试专用用户 ID，禁止使用真实用户 ID（如 407379598603583488L），避免污染线上真实用户的“我的应用列表”。
+     */
+    private static final Long TEST_USER_ID = 999999999999999999L;
+
+    /**
+     * 测试辅助方法：把工作流产物注册成测试 App 并执行验证。
      */
     private WorkflowContext executeWorkflowAndPublishToApp(String prompt, String appName) {
-        Long userId = Long.getLong("workflow.userId", 407379598603583488L);
+        Long userId = Long.getLong("workflow.userId", TEST_USER_ID);
         App app = createWorkflowApp(prompt, appName, userId);
-        WorkflowContext result = new CodeGenWorkflow().executeWorkflow(prompt, app.getId(), userId);
-        Assertions.assertNotNull(result);
-        Assertions.assertNull(result.getErrorMessage(), result.getErrorMessage());
-        Assertions.assertNotNull(result.getGenerationType());
+        try {
+            WorkflowContext result = new CodeGenWorkflow().executeWorkflow(prompt, app.getId(), userId);
+            Assertions.assertNotNull(result);
+            Assertions.assertNull(result.getErrorMessage(), result.getErrorMessage());
+            Assertions.assertNotNull(result.getGenerationType());
 
-        App updateApp = new App();
-        updateApp.setId(app.getId());
-        updateApp.setCodeGenType(result.getGenerationType().getValue());
-        updateApp.setCover(extractFirstAssetUrl(result.getImageListStr()));
-        updateApp.setEditTime(LocalDateTime.now());
-        Assertions.assertTrue(appService.updateById(updateApp));
+            App updateApp = new App();
+            updateApp.setId(app.getId());
+            updateApp.setCodeGenType(result.getGenerationType().getValue());
+            updateApp.setCover(extractFirstAssetUrl(result.getImageListStr()));
+            updateApp.setEditTime(LocalDateTime.now());
+            Assertions.assertTrue(appService.updateById(updateApp));
 
-        User loginUser = new User();
-        loginUser.setId(userId);
-        String deployUrl = appService.deployApp(app.getId(), loginUser);
-        App savedApp = appService.getById(app.getId());
-        Assertions.assertNotNull(savedApp.getDeployKey());
-        System.out.println("前端可见 App ID: " + savedApp.getId());
-        System.out.println("前端可见 App 名称: " + savedApp.getAppName());
-        System.out.println("前端 App 封面: " + savedApp.getCover());
-        System.out.println("前端预览地址: " + deployUrl);
-        System.out.println("我的应用列表用户 ID: " + userId);
-        return result;
+            User loginUser = new User();
+            loginUser.setId(userId);
+            String deployUrl = appService.deployApp(app.getId(), loginUser);
+            App savedApp = appService.getById(app.getId());
+            Assertions.assertNotNull(savedApp.getDeployKey());
+            System.out.println("测试 App ID: " + savedApp.getId());
+            System.out.println("测试 App 名称: " + savedApp.getAppName());
+            System.out.println("测试 App 封面: " + savedApp.getCover());
+            System.out.println("测试预览地址: " + deployUrl);
+            System.out.println("测试用户 ID: " + userId);
+            return result;
+        } finally {
+            // 测试环境默认清理生成的测试应用，避免数据库残留脏数据；若排查问题可通过 -Dworkflow.keepApp=true 保留
+            if (!Boolean.getBoolean("workflow.keepApp")) {
+                try {
+                    appService.deleteApp(app.getId());
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     private App createWorkflowApp(String prompt, String appName, Long userId) {
@@ -118,6 +133,9 @@ class CodeGenWorkflowTest {
         app.setAppName(appName);
         app.setCover(AppConstant.CODE_DEPLOY_HOST + "/placeholder-workflow-cover.svg");
         app.setInitPrompt(prompt);
+        // 先根据应用特征预置合法 codeGenType，避免流程中断时产生 codeGenType 为 NULL 的脏数据
+        CodeGenTypeEnum defaultType = appName.contains("Vue") ? CodeGenTypeEnum.VUE_PROJECT : CodeGenTypeEnum.MULTI_FILE;
+        app.setCodeGenType(defaultType.getValue());
         app.setPriority(0);
         app.setUserId(userId);
         app.setEditTime(now);

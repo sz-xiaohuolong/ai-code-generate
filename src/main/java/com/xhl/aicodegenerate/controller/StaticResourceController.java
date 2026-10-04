@@ -64,10 +64,18 @@ public class StaticResourceController {
             if (resourcePath.equals("/")) {
                 resourcePath = "/index.html";
             }
-            // 构建文件路径：生成预览优先，其次兼容部署目录
-            File file = new File(PREVIEW_ROOT_DIR + "/" + deployKey + resourcePath);
-            if (!file.exists()) {
-                file = new File(DEPLOY_ROOT_DIR + "/" + deployKey + resourcePath);
+            // 构建文件路径：生成预览优先（若为 Vue 工程构建产物存在 dist 目录则优先从 dist 读取），其次兼容部署目录
+            File file = null;
+            File distFile = new File(PREVIEW_ROOT_DIR + "/" + deployKey + "/dist" + resourcePath);
+            if (distFile.exists()) {
+                file = distFile;
+            } else {
+                File previewFile = new File(PREVIEW_ROOT_DIR + "/" + deployKey + resourcePath);
+                if (previewFile.exists()) {
+                    file = previewFile;
+                } else {
+                    file = new File(DEPLOY_ROOT_DIR + "/" + deployKey + resourcePath);
+                }
             }
             // 检查文件是否存在
             if (!file.exists()) {
