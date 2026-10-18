@@ -11,7 +11,7 @@
 - Operational Status：`ACTIVE`
 - Verification Status：`PARTIAL`
 - Shipping Authorization：代码提交与推送已获授权；线上部署不在范围内。
-- Last Stable Commit：`c9179c4`（功能实现与验证）；后续仅归档交付状态。
+- Last Stable Commit：`c9179c4`（功能实现与验证）；后续补充交付归档与经构建、浏览器验证的窄屏标签换行。
 - Last Updated：`2026-10-18`
 - Effective SPEC：[SPEC.md](releases/generation-modes/SPEC.md)
 - 设计：[PROPOSED_DESIGN.md](releases/generation-modes/PROPOSED_DESIGN.md)

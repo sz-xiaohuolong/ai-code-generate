@@ -2213,6 +2213,22 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
   }
 
+  .section-left {
+    max-width: 100%;
+  }
+
+  .collapse-toggle-btn {
+    flex-shrink: 0;
+  }
+
+  .app-brand-info {
+    flex-wrap: wrap;
+  }
+
+  .type-badge {
+    white-space: nowrap;
+  }
+
   .section-center {
     order: 3;
     width: 100%;
