@@ -13,6 +13,9 @@ public class AppAddRequest implements Serializable {
      */
     private String initPrompt;
 
+    /** 新建应用的生成模式，省略时使用标准模式。 */
+    private String generationMode;
+
 
     private static final long serialVersionUID = 1L;
 }

@@ -7,6 +7,13 @@ import { message } from 'ant-design-vue'
 import { userLogout } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getUserAvatar } from '@/constants/user'
+import { useGenerationModeStore } from '@/stores/generationMode'
+
+const generationModeStore = useGenerationModeStore()
+const generationModeOptions = [
+  { label: '标准模式', value: 'standard' },
+  { label: '工作流模式', value: 'workflow' },
+]
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -62,6 +69,16 @@ const handleLogout = async () => {
     </nav>
 
     <div class="header-right">
+      <div class="new-app-mode">
+        <span class="mode-label">新建默认模式</span>
+        <a-segmented
+          :value="generationModeStore.defaultMode"
+          :options="generationModeOptions"
+          size="small"
+          aria-label="新建应用默认模式，仅影响新建应用"
+          @change="generationModeStore.setDefaultMode"
+        />
+      </div>
       <a-dropdown class="mobile-navigation" :trigger="['click']" placement="bottomRight">
         <a-button aria-label="打开导航菜单"><MenuOutlined /></a-button>
         <template #overlay>
@@ -183,6 +200,19 @@ const handleLogout = async () => {
   flex: none;
 }
 
+.new-app-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+.mode-label {
+  font-size: 12px;
+  color: var(--ui-ink-faint);
+  white-space: nowrap;
+}
+
 .mobile-navigation {
   display: none;
 }
@@ -226,6 +256,14 @@ const handleLogout = async () => {
 
   .brand-name {
     display: none;
+  }
+
+  .mode-label {
+    display: none;
+  }
+
+  .new-app-mode {
+    margin-right: 0;
   }
 
   .primary-nav {

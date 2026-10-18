@@ -29,6 +29,7 @@ create table if not exists app
     cover        varchar(512)                       null comment '应用封面',
     initPrompt   text                               null comment '应用初始化的 prompt',
     codeGenType  varchar(64)                        null comment '代码生成类型（枚举）',
+    generationMode varchar(32) default 'standard'    not null comment '创建时固定的生成模式：standard/workflow',
     deployKey    varchar(64)                        null comment '部署标识',
     deployedTime datetime                           null comment '部署时间',
     priority     int      default 0                 not null comment '优先级',

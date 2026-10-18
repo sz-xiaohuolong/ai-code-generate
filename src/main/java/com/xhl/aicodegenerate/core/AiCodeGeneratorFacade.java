@@ -16,9 +16,11 @@ import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import cn.hutool.json.JSONUtil;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.model.chat.response.PartialToolCall;
+import dev.langchain4j.model.chat.response.StreamingHandle;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.BeforeToolExecution;
 import dev.langchain4j.service.tool.ToolExecution;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,8 @@ import reactor.core.publisher.FluxSink;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CancellationException;
 
 /**
  * AI 代码生成外观类，组合生成和保存功能
@@ -102,23 +106,37 @@ public class AiCodeGeneratorFacade {
      * @param codeGenTypeEnum 生成类型
      */
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum, AppChatMemoryId memoryId) {
+        return generateAndSaveCodeStream(userMessage, codeGenTypeEnum, memoryId, null, true);
+    }
+
+    /** 工作流负责最终质检、构建和截图，生成阶段只写入源码。 */
+    public Flux<String> generateAndSaveCodeStreamForWorkflow(String userMessage, CodeGenTypeEnum type,
+                                                            AppChatMemoryId memoryId, ChatMemoryProvider memoryProvider) {
+        return generateAndSaveCodeStream(userMessage, type, memoryId, memoryProvider, false);
+    }
+
+    private Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum,
+                                                   AppChatMemoryId memoryId, ChatMemoryProvider memoryProvider,
+                                                   boolean finalizeProject) {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
         // 根据类型创建 AI 服务实例
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum);
+        AiCodeGeneratorService aiCodeGeneratorService = memoryProvider == null
+                ? aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum)
+                : aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum, memoryProvider);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, memoryId.getAppId());
+                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, memoryId.getAppId(), finalizeProject);
             }
             case MULTI_FILE -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId());
+                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId(), finalizeProject);
             }
             case VUE_PROJECT -> {
                 TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeTokenStream(memoryId, userMessage);
-                yield tokenStreamToFlux(tokenStream, memoryId.getAppId());
+                yield tokenStreamToFlux(tokenStream, memoryId.getAppId(), finalizeProject);
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
@@ -135,26 +153,45 @@ public class AiCodeGeneratorFacade {
      * 下游再按生成类型选择不同流处理器。
      * </p>
      */
-    private Flux<String> tokenStreamToFlux(TokenStream tokenStream, Long appId) {
+    private Flux<String> tokenStreamToFlux(TokenStream tokenStream, Long appId, boolean finalizeProject) {
         return Flux.create(sink -> {
             AtomicBoolean completed = new AtomicBoolean(false);
+            AtomicReference<StreamingHandle> activeHandle = new AtomicReference<>();
+            sink.onCancel(() -> {
+                completed.set(true);
+                StreamingHandle handle = activeHandle.get();
+                if (handle != null) handle.cancel();
+            });
             tokenStream
-                    .onPartialResponse(partialResponse -> emit(sink, completed,
-                            CodeGenStreamMessage.aiResponse(partialResponse)))
-                    .onPartialThinking(partialThinking -> emit(sink, completed,
-                            CodeGenStreamMessage.thinking(partialThinking.text())))
-                    .onPartialToolCall(partialToolCall -> emit(sink, completed,
-                            toToolRequestMessage(partialToolCall)))
-                    .beforeToolExecution(beforeToolExecution -> emit(sink, completed,
-                            toToolRequestMessage(beforeToolExecution)))
+                    .onPartialResponseWithContext((partialResponse, context) -> {
+                        activeHandle.set(context.streamingHandle());
+                        if (sink.isCancelled()) context.streamingHandle().cancel();
+                        else emit(sink, completed, CodeGenStreamMessage.aiResponse(partialResponse.text()));
+                    })
+                    .onPartialThinkingWithContext((partialThinking, context) -> {
+                        activeHandle.set(context.streamingHandle());
+                        if (sink.isCancelled()) context.streamingHandle().cancel();
+                        else emit(sink, completed, CodeGenStreamMessage.thinking(partialThinking.text()));
+                    })
+                    .onPartialToolCallWithContext((partialToolCall, context) -> {
+                        activeHandle.set(context.streamingHandle());
+                        if (sink.isCancelled()) context.streamingHandle().cancel();
+                        else emit(sink, completed, toToolRequestMessage(partialToolCall));
+                    })
+                    .beforeToolExecution(beforeToolExecution -> {
+                        if (sink.isCancelled()) throw new CancellationException("生成已中断，停止后续工具执行");
+                        emit(sink, completed, toToolRequestMessage(beforeToolExecution));
+                    })
                     .onToolExecuted(toolExecution -> emit(sink, completed,
                             toToolExecutedMessage(toolExecution)))
                     .onCompleteResponse(response -> {
-                        if (completed.compareAndSet(false, true)) {
+                        if (!sink.isCancelled() && completed.compareAndSet(false, true)) {
                             try {
-                                buildVueProject(appId);
-                                String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
-                                triggerScreenshot(appId, CodeGenTypeEnum.VUE_PROJECT, new File(projectPath));
+                                if (finalizeProject) {
+                                    buildVueProject(appId);
+                                    String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
+                                    triggerScreenshot(appId, CodeGenTypeEnum.VUE_PROJECT, new File(projectPath));
+                                }
                             } catch (Exception e) {
                                 log.error("Vue 项目同步构建或触发封面截图异常: {}", e.getMessage(), e);
                             }
@@ -217,7 +254,8 @@ public class AiCodeGeneratorFacade {
      * @param codeGenType 代码生成类型
      * @return 流式响应
      */
-    private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, Long appId) {
+    private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, Long appId,
+                                            boolean finalizeProject) {
         StringBuilder codeBuilder = new StringBuilder();
         return codeStream.doOnNext(chunk -> {
             // 实时收集代码片段
@@ -231,9 +269,12 @@ public class AiCodeGeneratorFacade {
                 // 使用执行器保存代码
                 File savedDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
                 log.info("保存成功，路径为：" + savedDir.getAbsolutePath());
-                triggerScreenshot(appId, codeGenType, savedDir);
+                if (finalizeProject) {
+                    triggerScreenshot(appId, codeGenType, savedDir);
+                }
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "保存生成代码失败：" + e.getMessage());
             }
         });
     }

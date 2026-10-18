@@ -95,6 +95,9 @@ public class WorkflowContext implements Serializable {
      */
     private QualityResult qualityResult;
 
+    /** 质检服务不可用时的显式降级说明，不代表检查通过。 */
+    private String qualityCheckSkippedReason;
+
     /**
      * 质量检查失败后的重新生成次数
      */

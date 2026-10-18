@@ -58,6 +58,14 @@ import { getUserAvatar } from '@/constants/user'
 import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 import AppChatComposer from '@/components/AppChatComposer.vue'
 import {
+  GENERATION_MODE_LABELS,
+  normalizeGenerationMode,
+  isWorkflowHistoryComplete,
+  updateWorkflowProgress,
+  WORKFLOW_STATUS_LABELS,
+  type WorkflowStep,
+} from '@/utils/workflowProgress'
+import {
   createVisualEditorBridge,
   formatVisualElementForPrompt,
   type VisualSelectedElement,
@@ -71,6 +79,8 @@ type ChatMessage = {
   stage?: 'analyzing' | 'coding' | 'done' | 'error'
   errorMessage?: string
   rawPrompt?: string
+  workflowSteps?: WorkflowStep[]
+  workflowCompleted?: boolean
 }
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile'
@@ -82,6 +92,8 @@ const loginUserStore = useLoginUserStore()
 const { loginUser } = storeToRefs(loginUserStore)
 const appId = computed(() => String(route.params.id))
 const appInfo = ref<API.AppVO>({})
+const isWorkflow = computed(() => appInfo.value.generationMode === 'workflow')
+const generationModeLabel = computed(() => GENERATION_MODE_LABELS[normalizeGenerationMode(appInfo.value.generationMode)])
 const messages = ref<ChatMessage[]>([])
 const historyLoading = ref(false)
 const hasMoreHistory = ref(false)
@@ -148,7 +160,7 @@ const previewUrl = computed(() => {
 })
 
 const codeGenTypeLabel = computed(() => {
-  return CODE_GEN_TYPE_CONFIG[appInfo.value.codeGenType as CodeGenTypeEnum]?.label || '未知模式'
+  return CODE_GEN_TYPE_CONFIG[appInfo.value.codeGenType as CodeGenTypeEnum]?.label || '未知类型'
 })
 
 const canOperate = computed(() => {
@@ -202,12 +214,14 @@ const exitEditMode = () => {
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
+  const failed = record.messageType === 'ai' && /^(工作流生成失败：|工作流已中断|AI 回复失败：)/.test(record.message || '')
   return {
     id: record.id,
     role: record.messageType === 'ai' ? 'ai' : 'user',
     content: record.message || '',
     createTime: record.createTime,
-    stage: 'done',
+    stage: failed ? 'error' : 'done',
+    errorMessage: failed ? record.message : undefined,
   }
 }
 
@@ -241,7 +255,11 @@ const loadHistory = async (loadMore = false) => {
       messages.value = loadMore ? [...historyMessages, ...messages.value] : historyMessages
       hasMoreHistory.value = records.length === 10 && (res.data.data.totalRow || 0) > records.length
       if (!loadMore) {
-        previewVisible.value = (res.data.data.totalRow || records.length) >= 2
+        previewVisible.value = isWorkflow.value
+          ? isWorkflowHistoryComplete(records[records.length - 1])
+          : (res.data.data.totalRow || records.length) >= 2
+            && historyMessages[historyMessages.length - 1]?.role === 'ai'
+            && historyMessages[historyMessages.length - 1]?.stage !== 'error'
         scrollToBottom()
       }
       return true
@@ -261,11 +279,19 @@ const closeStream = () => {
   }
 }
 
-const hasAiResponse = () => {
-  return messages.value.some((item) => item.role === 'ai' && item.content.trim())
-}
-
 const showPreviewAfterGenerated = async () => {
+  if (streamFinished) return
+  const current = messages.value[messages.value.length - 1]
+  if (current?.stage === 'error' || (isWorkflow.value && !current?.workflowCompleted)) {
+    streamFinished = true
+    generating.value = false
+    if (current) {
+      current.stage = 'error'
+      current.errorMessage ||= '工作流未确认完成，请重新生成'
+    }
+    closeStream()
+    return
+  }
   streamFinished = true
   generating.value = false
   previewVisible.value = true
@@ -292,6 +318,36 @@ const appendAiContent = (content: string) => {
   scrollToBottom()
 }
 
+const handleStreamChunk = (chunk: string) => {
+  if (isWorkflow.value) {
+    try {
+      const event = JSON.parse(chunk)
+      const current = messages.value[messages.value.length - 1]
+      if (event.type === 'workflow_progress' && current?.role === 'ai') {
+        if (event.id === 'workflow') {
+          current.workflowCompleted = event.status === 'completed'
+        } else {
+          current.workflowSteps = updateWorkflowProgress(current.workflowSteps || [], event)
+          if (event.id === 'code_generator' && event.status === 'running') current.content = ''
+        }
+        if (event.status === 'failed') {
+          current.stage = 'error'
+          current.errorMessage = event.message
+        }
+        scrollToBottom()
+        return
+      }
+      if (event.type === 'ai_response') {
+        appendAiContent(event.data || '')
+        return
+      }
+    } catch {
+      // 保留旧服务返回原始文本时的兼容展示。
+    }
+  }
+  appendAiContent(chunk)
+}
+
 const stopGeneration = () => {
   if (!generating.value) return
   closeStream()
@@ -299,10 +355,10 @@ const stopGeneration = () => {
   generating.value = false
   const lastMessage = messages.value[messages.value.length - 1]
   if (lastMessage?.role === 'ai') {
-    lastMessage.stage = 'done'
-    if (!lastMessage.content) {
-      lastMessage.content = '_已手动终止生成。_'
-    }
+    lastMessage.stage = 'error'
+    lastMessage.errorMessage = '生成已手动中断，结果尚未确认可用'
+    lastMessage.workflowSteps = lastMessage.workflowSteps?.map((step) => step.status === 'running'
+      ? { ...step, status: 'failed', message: '已手动中断' } : step)
   }
   message.info('已终止本次生成')
 }
@@ -352,6 +408,7 @@ const sendMessage = (value?: string) => {
   })
 
   eventSource.onmessage = (event) => {
+    if (streamFinished) return
     if (event.data === '[DONE]') {
       showPreviewAfterGenerated()
       return
@@ -362,9 +419,9 @@ const sendMessage = (value?: string) => {
         showPreviewAfterGenerated()
         return
       }
-      appendAiContent(data.d || '')
+      handleStreamChunk(data.d || '')
     } catch (error) {
-      appendAiContent(event.data || '')
+      handleStreamChunk(event.data || '')
     }
   }
 
@@ -402,16 +459,15 @@ const sendMessage = (value?: string) => {
 
   eventSource.onerror = () => {
     if (streamFinished) return
-    if (hasAiResponse()) {
-      showPreviewAfterGenerated()
-      return
-    }
     const lastMessage = messages.value[messages.value.length - 1]
     if (lastMessage?.role === 'ai') {
       lastMessage.stage = 'error'
-      lastMessage.errorMessage = '生成连接异常，请重试'
+      lastMessage.errorMessage = '生成连接中断，结果尚未确认完成，请重试'
+      lastMessage.workflowSteps = lastMessage.workflowSteps?.map((step) => step.status === 'running'
+        ? { ...step, status: 'failed', message: '生成连接中断' } : step)
     }
     generating.value = false
+    streamFinished = true
     closeStream()
     message.error('生成连接异常，请稍后重试')
   }
@@ -706,6 +762,7 @@ onBeforeUnmount(() => {
         <div class="app-brand-info">
           <span class="app-name" :title="appInfo.appName">{{ appInfo.appName || 'AI 网页生成' }}</span>
           <span v-if="appInfo.codeGenType" class="type-badge">{{ codeGenTypeLabel }}</span>
+          <span v-if="appInfo.id" class="type-badge generation-mode-badge" title="模式在应用创建时确定">{{ generationModeLabel }}</span>
           <span v-if="generating" class="status-indicator live">
             <span class="pulse-point" /> 构建中
           </span>
@@ -883,6 +940,22 @@ onBeforeUnmount(() => {
           >
             <div v-if="item.role === 'ai'" class="ai-avatar-icon">AI</div>
             <div class="message-bubble" :class="{ 'is-error': item.stage === 'error' }">
+              <div v-if="item.workflowSteps?.length" class="workflow-progress" aria-live="polite">
+                <div class="workflow-progress-title">
+                  <span>工作流进度</span>
+                  <button v-if="generating && index === messages.length - 1" type="button" class="stop-gen-btn" @click="stopGeneration">终止</button>
+                </div>
+                <div v-for="step in item.workflowSteps" :key="step.id" class="workflow-step" :class="step.status">
+                  <SyncOutlined v-if="step.status === 'running'" spin />
+                  <CheckOutlined v-else-if="step.status === 'completed'" />
+                  <span v-else class="workflow-step-mark">{{ step.status === 'failed' ? '!' : '·' }}</span>
+                  <div class="workflow-step-body">
+                    <span>{{ step.name }}<small v-if="step.retryCount"> · 已修复 {{ step.retryCount }} 次</small></span>
+                    <p>{{ step.message }}</p>
+                  </div>
+                  <span class="workflow-step-status">{{ WORKFLOW_STATUS_LABELS[step.status] }}</span>
+                </div>
+              </div>
               <!-- 业务异常恢复卡片 (Error Recovery Card) -->
               <div v-if="item.stage === 'error'" class="error-recovery-card">
                 <div class="error-card-header">
@@ -914,7 +987,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Tortuga 级流式时序时间线 (Pipeline Telemetry) -->
-              <div v-else-if="item.role === 'ai' && generating && !item.content" class="tortuga-pipeline">
+              <div v-else-if="item.role === 'ai' && generating && !item.content && !isWorkflow" class="tortuga-pipeline">
                 <div class="pipeline-header">
                   <div class="pipeline-title">
                     <span class="live-dot-pulse" />
@@ -1086,6 +1159,10 @@ onBeforeUnmount(() => {
           <span class="detail-label">生成类型</span>
           <span class="detail-value">{{ codeGenTypeLabel }}</span>
         </div>
+        <div class="detail-item">
+          <span class="detail-label">生成模式</span>
+          <span class="detail-value">{{ generationModeLabel }}（创建时确定）</span>
+        </div>
         <div v-if="appInfo.deployKey" class="detail-item">
           <span class="detail-label">部署路径</span>
           <span class="detail-value mono">{{ appInfo.deployKey }}</span>
@@ -1111,6 +1188,44 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.workflow-progress {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-surface);
+}
+.workflow-progress-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.workflow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.workflow-step > .anticon, .workflow-step-mark {
+  flex: none;
+  width: 16px;
+  margin-top: 2px;
+  text-align: center;
+}
+.workflow-step-body { flex: 1; min-width: 0; }
+.workflow-step-body p { margin: 4px 0 0; color: var(--ui-ink-faint); font-size: 11px; }
+.workflow-step-body small { font-size: 10px; color: var(--ui-ink-faint); }
+.workflow-step-status { flex: none; font-size: 10px; color: var(--ui-ink-faint); }
+.workflow-step.running > .anticon, .workflow-step.running .workflow-step-status { color: var(--ui-accent); }
+.workflow-step.completed > .anticon { color: #3d8762; }
+.workflow-step.skipped .workflow-step-status, .workflow-step.retrying .workflow-step-status { color: #ad7a28; }
+.workflow-step.failed .workflow-step-status, .workflow-step.failed .workflow-step-mark { color: #c14c4c; }
+.generation-mode-badge { white-space: nowrap; }
+
 .chat-page {
   display: flex;
   flex-direction: column;

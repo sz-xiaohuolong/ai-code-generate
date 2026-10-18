@@ -98,6 +98,12 @@ public class AiCodeGeneratorServiceFactory {
         // 每次创建服务时都使用同一套 ChatMemoryProvider。
         // 先触发一次 messages()，让 ChatMemoryStore 有机会从 DB 恢复历史到 Redis。先把历史上下文准备好，再让 LangChain4j 把本次用户消息追加进去。
         ChatMemoryProvider currentChatMemoryProvider = chatMemoryProvider(chatMemoryStore());
+        return createAiCodeGeneratorService(memoryId, codeGenType, currentChatMemoryProvider);
+    }
+
+    /** 工作流可使用本轮临时记忆，避免内部重试写入正式聊天记录。 */
+    public AiCodeGeneratorService createAiCodeGeneratorService(AppChatMemoryId memoryId, CodeGenTypeEnum codeGenType,
+                                                               ChatMemoryProvider currentChatMemoryProvider) {
         currentChatMemoryProvider.get(memoryId).messages();
         return switch (codeGenType) {
             case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)

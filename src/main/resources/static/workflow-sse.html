@@ -31,11 +31,8 @@
     <section class="panel">
         <textarea id="prompt">创建一个简洁企业官网，展示公司形象和业务介绍，包含首页横幅、服务介绍和联系方式</textarea>
         <div class="fields">
-            <label>App ID（可选）
-                <input id="appId" placeholder="不填则使用临时 appId">
-            </label>
-            <label>User ID（可选）
-                <input id="userId" placeholder="不填默认为 0">
+            <label>工作流应用 ID（需先登录）
+                <input id="appId" placeholder="当前登录用户的工作流应用 ID" required>
             </label>
         </div>
         <div class="actions">
@@ -61,17 +58,12 @@
         setStatus('连接中...');
         const params = new URLSearchParams({ prompt });
         const appId = document.getElementById('appId').value.trim();
-        const userId = document.getElementById('userId').value.trim();
-        if (appId) {
-            params.set('appId', appId);
-        }
-        if (userId) {
-            params.set('userId', userId);
-        }
+        if (!appId) { alert('请输入属于当前登录用户的工作流应用 ID'); return; }
+        params.set('appId', appId);
         source = new EventSource('/api/workflow/execute-flux?' + params.toString());
         source.onopen = () => setStatus('已连接，工作流执行中');
-        source.onerror = () => setStatus('连接结束或发生错误');
-        ['workflow_start', 'step_completed', 'workflow_completed', 'workflow_error'].forEach(type => {
+        source.onerror = () => { setStatus('连接中断，请检查登录状态及应用权限'); closeStream(); };
+        ['workflow_start', 'step_started', 'step_completed', 'code_chunk', 'workflow_completed', 'workflow_error'].forEach(type => {
             source.addEventListener(type, event => {
                 addEvent(type, event.data);
                 if (type === 'workflow_completed' || type === 'workflow_error') {

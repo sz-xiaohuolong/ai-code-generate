@@ -58,6 +58,10 @@ public class App implements Serializable {
     @Column("codeGenType")
     private String codeGenType;
 
+    /** 创建时确定的生成模式：standard / workflow。 */
+    @Column("generationMode")
+    private String generationMode;
+
     /**
      * 部署标识
      */

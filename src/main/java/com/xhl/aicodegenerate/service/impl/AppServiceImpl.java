@@ -21,9 +21,11 @@ import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.exception.ThrowUtils;
 import com.xhl.aicodegenerate.mapper.AppMapper;
+import com.xhl.aicodegenerate.langgraph4j.CodeGenWorkflow;
 import com.xhl.aicodegenerate.model.dto.app.AppAddRequest;
 import com.xhl.aicodegenerate.model.dto.app.AppQueryRequest;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
+import com.xhl.aicodegenerate.model.enums.GenerationModeEnum;
 import com.xhl.aicodegenerate.model.vo.AppVO;
 import com.xhl.aicodegenerate.model.vo.UserVO;
 import com.xhl.aicodegenerate.service.AppService;
@@ -79,6 +81,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private ToolManager toolManager;
 
     @Resource
+    private CodeGenWorkflow codeGenWorkflow;
+
+    @Resource
     private com.xhl.aicodegenerate.service.AppScreenshotService appScreenshotService;
 
     private final VueProjectBuilder vueProjectBuilder = new VueProjectBuilder();
@@ -88,10 +93,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 参数校验
         String initPrompt = appAddRequest.getInitPrompt();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+        GenerationModeEnum mode = GenerationModeEnum.resolve(appAddRequest.getGenerationMode());
         // 构造入库对象
         App app = new App();
         BeanUtil.copyProperties(appAddRequest, app);
         app.setUserId(loginUser.getId());
+        app.setGenerationMode(mode.getValue());
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
         // 使用 AI 智能选择代码生成类型
@@ -175,6 +182,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         AppVO appVO = new AppVO();
         BeanUtil.copyProperties(app, appVO);
+        appVO.setGenerationMode(GenerationModeEnum.resolve(app.getGenerationMode()).getValue());
         if (StrUtil.isBlank(app.getCodeGenType()) && StrUtil.isNotBlank(app.getInitPrompt())) {
             try {
                 CodeGenTypeEnum deduced = aiCodeGenTypeRoutingService.routeCodeGenType(app.getInitPrompt());
@@ -234,6 +242,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
         }
+        GenerationModeEnum generationMode = GenerationModeEnum.resolve(app.getGenerationMode());
         // 4. 获取应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
@@ -253,6 +262,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 注意：必须在调用 AI 前初始化，避免本次 @UserMessage 被数据库恢复逻辑重复加载。
         AppChatMemoryId memoryId = new AppChatMemoryId(appId, loginUser.getId());
         chatMemoryProvider.get(memoryId).messages();
+        if (generationMode == GenerationModeEnum.WORKFLOW) {
+            return codeGenWorkflow.generateForApp(message, appId, loginUser.getId(), codeGenTypeEnum,
+                    chatMemoryProvider.get(memoryId));
+        }
         // 6. 调用 AI 生成代码。用户消息和 AI 回复不在这里手动保存，
         // 而是由 LangChain4j 更新 ChatMemory 时统一进入 DatabaseLoadingChatMemoryStore。
         try {

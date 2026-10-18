@@ -1,248 +1,301 @@
 package com.xhl.aicodegenerate.langgraph4j;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
-import com.xhl.aicodegenerate.langgraph4j.node.CodeGeneratorNode;
-import com.xhl.aicodegenerate.langgraph4j.node.CodeQualityCheckNode;
-import com.xhl.aicodegenerate.langgraph4j.node.ImageCollectorNode;
-import com.xhl.aicodegenerate.langgraph4j.node.ProjectBuilderNode;
-import com.xhl.aicodegenerate.langgraph4j.node.PromptEnhancerNode;
-import com.xhl.aicodegenerate.langgraph4j.node.RouterNode;
-import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
 import com.xhl.aicodegenerate.langgraph4j.model.QualityResult;
+import com.xhl.aicodegenerate.langgraph4j.node.*;
+import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
+import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
+import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
+import com.xhl.aicodegenerate.service.AppScreenshotService;
+import com.xhl.aicodegenerate.utils.SpringContextUtil;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import lombok.extern.slf4j.Slf4j;
-import org.bsc.langgraph4j.CompiledGraph;
-import org.bsc.langgraph4j.GraphRepresentation;
-import org.bsc.langgraph4j.GraphStateException;
-import org.bsc.langgraph4j.NodeOutput;
+import org.bsc.langgraph4j.*;
+import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SignalType;
 
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 
-/**
- * AI 代码生成工作流。LangGraph4j 主编排服务
- * <p>
- * 对应核心链路：
- * 图片收集 -> 提示词增强 -> 智能路由 -> 代码生成 -> 项目构建。
- * 每个节点只处理自己的职责，业务能力继续复用项目中已有的 AI 服务、代码生成门面和 Vue 构建器。
- * </p>
- */
+/** 复用代码生成能力，编排素材、生成、质检和构建，并发送真实节点进度。 */
 @Slf4j
 @Service
 public class CodeGenWorkflow {
-
     private static final String IMAGE_COLLECTOR = "image_collector";
-
     private static final String PROMPT_ENHANCER = "prompt_enhancer";
-
     private static final String ROUTER = "router";
-
     private static final String CODE_GENERATOR = "code_generator";
-
     private static final String CODE_QUALITY_CHECK = "code_quality_check";
-
     private static final String PROJECT_BUILDER = "project_builder";
-
     private static final AtomicLong TEMP_APP_ID_GENERATOR = new AtomicLong(System.currentTimeMillis());
 
-    public WorkflowContext executeWorkflow(String originalPrompt) {
-        // 直接 new CodeGenWorkflow() 跑测试时没有真实应用 id。
-        // 使用临时 appId 隔离 ChatMemory，避免多条真实大模型测试共享 appId=0 后互相污染工具调用上下文。
-        return executeWorkflow(originalPrompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
+    public WorkflowContext executeWorkflow(String prompt) {
+        return executeWorkflow(prompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
     }
 
-    public WorkflowContext executeWorkflow(String originalPrompt, Long appId, Long userId) {
-        WorkflowContext initialContext = WorkflowContext.builder()
-                .currentStep("初始化")
-                .originalPrompt(originalPrompt)
-                .appId(appId)
-                .userId(userId)
-                .build();
+    public WorkflowContext executeWorkflow(String prompt, Long appId, Long userId) {
+        return executeWorkflow(prompt, appId, userId, null);
+    }
 
-        WorkflowContext finalContext = initialContext;
+    public WorkflowContext executeWorkflow(String prompt, Long appId, Long userId, CodeGenTypeEnum type) {
         try {
-            // 创建工作流
-            CompiledGraph<MessagesState<String>> workflow = createWorkflow();
-            // 执行工作流，本质上是把 initialContext 放进 LangGraph4j 的状态容器里，然后从容器里取结果。
-            for (NodeOutput<MessagesState<String>> step
-                    : workflow.stream(WorkflowContext.saveContext(initialContext))) {
-                WorkflowContext currentContext = WorkflowContext.getContext(step.state());
-                if (currentContext != null) {
-                    // 每一个节点执行完后都会添加一个 WorkflowContext
-                    finalContext = currentContext;
-                    log.info("工作流步骤完成: {}, context={}", currentContext.getCurrentStep(), currentContext);
-                }
-            }
-            return finalContext;
-        } catch (GraphStateException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "LangGraph4j 工作流执行失败：" + e.getMessage());
+            return runWorkflow(initialContext(prompt, appId, userId, type), null, event -> {}, () -> false);
+        } catch (Exception e) {
+            throw workflowFailure(e);
         }
     }
 
-    /**
-     * 执行工作流（Flux SSE 文本格式）。
-     */
-    public Flux<String> executeWorkflowWithFlux(String originalPrompt) {
-        return executeWorkflowWithFlux(originalPrompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
+    /** 应用入口：内部记忆隔离，正式历史保留一次原始输入和最终结果。 */
+    public Flux<String> generateForApp(String prompt, Long appId, Long userId, CodeGenTypeEnum type,
+                                       ChatMemory persistentMemory) {
+        return Flux.defer(() -> {
+            ChatMemory runMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+            runMemory.add(persistentMemory.messages());
+            persistentMemory.add(UserMessage.from(prompt));
+            StringBuilder finalContent = new StringBuilder();
+            AtomicBoolean recorded = new AtomicBoolean();
+            AtomicBoolean qualitySkipped = new AtomicBoolean();
+            return executeWorkflowEvents(prompt, appId, userId, type, id -> runMemory)
+                    .<String>handle((event, sink) -> {
+                        if ("step_started".equals(event.eventType())
+                                && CODE_GENERATOR.equals(event.data().get("id"))) {
+                            finalContent.setLength(0);
+                        }
+                        if ("code_chunk".equals(event.eventType())) {
+                            String text = String.valueOf(event.data().get("content"));
+                            finalContent.append(text);
+                            sink.next(JSONUtil.toJsonStr(CodeGenStreamMessage.aiResponse(text)));
+                        } else {
+                            if (CODE_QUALITY_CHECK.equals(event.data().get("id"))) {
+                                qualitySkipped.set("skipped".equals(event.data().get("status")));
+                            }
+                            sink.next(JSONUtil.toJsonStr(event.data()));
+                            if ("workflow_error".equals(event.eventType())) {
+                                sink.error(new BusinessException(ErrorCode.SYSTEM_ERROR,
+                                        String.valueOf(event.data().get("message"))));
+                            }
+                        }
+                    })
+                    .doOnComplete(() -> recordResult(persistentMemory, recorded,
+                            finalContent + "\n\n工作流已完成，生成结果可预览。"
+                                    + (qualitySkipped.get() ? "本次质检服务不可用，已跳过检查。" : "")))
+                    .doOnError(error -> recordResult(persistentMemory, recorded,
+                            "工作流生成失败：" + error.getMessage()))
+                    .doFinally(signal -> {
+                        if (signal == SignalType.CANCEL) {
+                            recordResult(persistentMemory, recorded, "工作流已中断，生成结果尚未确认可用。");
+                        }
+                    });
+        });
     }
 
-    public Flux<String> executeWorkflowWithFlux(String originalPrompt, Long appId, Long userId) {
-        return executeWorkflowEvents(originalPrompt, appId, userId)
+    public Flux<String> executeWorkflowWithFlux(String prompt) {
+        return executeWorkflowWithFlux(prompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
+    }
+
+    public Flux<String> executeWorkflowWithFlux(String prompt, Long appId, Long userId) {
+        return executeWorkflowEvents(prompt, appId, userId, null, null)
                 .map(event -> formatSseEvent(event.eventType(), event.data()));
     }
 
-    public Flux<ServerSentEvent<String>> executeWorkflowWithServerSentEvent(String originalPrompt) {
-        return executeWorkflowWithServerSentEvent(originalPrompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
+    public Flux<ServerSentEvent<String>> executeWorkflowWithServerSentEvent(String prompt) {
+        return executeWorkflowWithServerSentEvent(prompt, TEMP_APP_ID_GENERATOR.incrementAndGet(), 0L);
     }
 
-    public Flux<ServerSentEvent<String>> executeWorkflowWithServerSentEvent(String originalPrompt, Long appId, Long userId) {
-        return executeWorkflowEvents(originalPrompt, appId, userId)
-                .map(event -> ServerSentEvent.builder(JSONUtil.toJsonStr(event.data()))
-                        .event(event.eventType())
-                        .build());
+    public Flux<ServerSentEvent<String>> executeWorkflowWithServerSentEvent(String prompt, Long appId, Long userId) {
+        return executeWorkflowWithServerSentEvent(prompt, appId, userId, null);
     }
 
-    private Flux<WorkflowStreamEvent> executeWorkflowEvents(String originalPrompt, Long appId, Long userId) {
-        return Flux.create(sink -> Thread.ofVirtual().name("workflow-sse-" + System.currentTimeMillis()).start(() -> {
-            try {
-                CompiledGraph<MessagesState<String>> workflow = createWorkflow();
-                WorkflowContext initialContext = WorkflowContext.builder()
-                        .currentStep("初始化")
-                        .originalPrompt(originalPrompt)
-                        .appId(appId)
-                        .userId(userId)
-                        .build();
-                sink.next(new WorkflowStreamEvent("workflow_start", Map.of(
-                        "message", "开始执行代码生成工作流",
-                        "originalPrompt", originalPrompt
-                )));
-                int stepCounter = 1;
-                WorkflowContext finalContext = initialContext;
-                for (NodeOutput<MessagesState<String>> step
-                        : workflow.stream(WorkflowContext.saveContext(initialContext))) {
-                    WorkflowContext currentContext = WorkflowContext.getContext(step.state());
-                    if (currentContext != null) {
-                        finalContext = currentContext;
-                        sink.next(new WorkflowStreamEvent("step_completed", Map.of(
-                                "stepNumber", stepCounter,
-                                "currentStep", currentContext.getCurrentStep(),
-                                "generationType", currentContext.getGenerationType() == null
-                                        ? ""
-                                        : currentContext.getGenerationType().getValue(),
-                                "generatedCodeDir", currentContext.getGeneratedCodeDir() == null
-                                        ? ""
-                                        : currentContext.getGeneratedCodeDir()
-                        )));
+    public Flux<ServerSentEvent<String>> executeWorkflowWithServerSentEvent(String prompt, Long appId, Long userId,
+                                                                          CodeGenTypeEnum type) {
+        return executeWorkflowEvents(prompt, appId, userId, type, null)
+                .map(event -> ServerSentEvent.builder(JSONUtil.toJsonStr(event.data())).event(event.eventType()).build());
+    }
+
+    private Flux<WorkflowStreamEvent> executeWorkflowEvents(String prompt, Long appId, Long userId,
+                                                            CodeGenTypeEnum type, ChatMemoryProvider memoryProvider) {
+        return Flux.create(sink -> {
+            Thread worker = Thread.ofVirtual().name("workflow-" + appId).unstarted(() -> {
+                try {
+                    sink.next(progress("workflow_start", "workflow", "工作流", "running", "开始执行工作流", 0));
+                    runWorkflow(initialContext(prompt, appId, userId, type), memoryProvider, sink::next, sink::isCancelled);
+                    if (!sink.isCancelled()) {
+                        sink.next(progress("workflow_completed", "workflow", "工作流", "completed", "工作流已完成", 0));
+                        sink.complete();
                     }
-                    stepCounter++;
+                } catch (Exception e) {
+                    if (!sink.isCancelled()) {
+                        BusinessException failure = workflowFailure(e);
+                        log.warn("工作流失败：{}", failure.getMessage());
+                        sink.next(progress("workflow_error", "workflow", "工作流", "failed", failure.getMessage(), 0));
+                        sink.complete();
+                    }
                 }
-                sink.next(new WorkflowStreamEvent("workflow_completed", Map.of(
-                        "message", "代码生成工作流执行完成",
-                        "currentStep", finalContext.getCurrentStep(),
-                        "generatedCodeDir", finalContext.getGeneratedCodeDir() == null
-                                ? ""
-                                : finalContext.getGeneratedCodeDir(),
-                        "buildResultDir", finalContext.getBuildResultDir() == null
-                                ? ""
-                                : finalContext.getBuildResultDir(),
-                        "errorMessage", finalContext.getErrorMessage() == null
-                                ? ""
-                                : finalContext.getErrorMessage()
-                )));
-                sink.complete();
-            } catch (Exception e) {
-                log.error("工作流 Flux 执行失败: {}", e.getMessage(), e);
-                sink.next(new WorkflowStreamEvent("workflow_error", Map.of(
-                        "message", "工作流执行失败",
-                        "error", e.getMessage()
-                )));
-                sink.complete();
-            }
-        }));
+            });
+            sink.onCancel(worker::interrupt);
+            worker.start();
+        });
     }
 
-    //流水线设计图
+    private WorkflowContext runWorkflow(WorkflowContext initial, ChatMemoryProvider memoryProvider,
+                                         Consumer<WorkflowStreamEvent> events, BooleanSupplier cancelled) throws Exception {
+        CompiledGraph<MessagesState<String>> graph = createWorkflow(events, cancelled, memoryProvider);
+        WorkflowContext result = initial;
+        for (NodeOutput<MessagesState<String>> step : graph.stream(WorkflowContext.saveContext(initial))) {
+            checkCancelled(cancelled);
+            WorkflowContext current = WorkflowContext.getContext(step.state());
+            if (current != null) result = current;
+        }
+        if (StrUtil.isNotBlank(result.getErrorMessage())) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, result.getErrorMessage());
+        }
+        if (result.getGenerationType() != CodeGenTypeEnum.VUE_PROJECT) {
+            events.accept(progress("step_completed", PROJECT_BUILDER, "项目构建", "skipped", "静态页面无需构建", result.getQualityCheckRetryCount()));
+            try {
+                SpringContextUtil.getBean(AppScreenshotService.class)
+                        .captureAppCoverAsync(result.getAppId(), result.getGeneratedCodeDir());
+            } catch (Exception e) {
+                log.debug("工作流完成后的封面截图不可用：{}", e.getMessage());
+            }
+        }
+        return result;
+    }
+
     public String getMermaidGraph() {
         try {
-            GraphRepresentation graph = createWorkflow().getGraph(GraphRepresentation.Type.MERMAID);
-            return graph.content();
+            return createWorkflow(event -> {}, () -> false, null).getGraph(GraphRepresentation.Type.MERMAID).content();
         } catch (GraphStateException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "LangGraph4j 工作流图生成失败：" + e.getMessage());
+            throw workflowFailure(e);
         }
     }
 
-    private CompiledGraph<MessagesState<String>> createWorkflow() throws GraphStateException {
+    private CompiledGraph<MessagesState<String>> createWorkflow(Consumer<WorkflowStreamEvent> events,
+                                                                BooleanSupplier cancelled,
+                                                                ChatMemoryProvider memoryProvider) throws GraphStateException {
+        Consumer<String> content = chunk -> {
+            checkCancelled(cancelled);
+            events.accept(new WorkflowStreamEvent("code_chunk", Map.of("content", chunk)));
+        };
         return new MessagesStateGraph<String>()
-                .addNode(IMAGE_COLLECTOR, ImageCollectorNode.create())
-                .addNode(PROMPT_ENHANCER, PromptEnhancerNode.create())
-                .addNode(ROUTER, RouterNode.create())
-                .addNode(CODE_GENERATOR, CodeGeneratorNode.create())
-                .addNode(CODE_QUALITY_CHECK, CodeQualityCheckNode.create())
-                .addNode(PROJECT_BUILDER, ProjectBuilderNode.create())
+                .addNode(IMAGE_COLLECTOR, observed(IMAGE_COLLECTOR, "素材收集", ImageCollectorNode.create(), events, cancelled))
+                .addNode(PROMPT_ENHANCER, observed(PROMPT_ENHANCER, "提示增强", PromptEnhancerNode.create(), events, cancelled))
+                .addNode(ROUTER, observed(ROUTER, "确认代码类型", RouterNode.create(), events, cancelled))
+                .addNode(CODE_GENERATOR, observed(CODE_GENERATOR, "代码生成", CodeGeneratorNode.create(content, memoryProvider), events, cancelled))
+                .addNode(CODE_QUALITY_CHECK, observed(CODE_QUALITY_CHECK, "代码质检", CodeQualityCheckNode.create(), events, cancelled))
+                .addNode(PROJECT_BUILDER, observed(PROJECT_BUILDER, "项目构建", ProjectBuilderNode.create(), events, cancelled))
                 .addEdge(START, IMAGE_COLLECTOR)
                 .addEdge(IMAGE_COLLECTOR, PROMPT_ENHANCER)
                 .addEdge(PROMPT_ENHANCER, ROUTER)
                 .addEdge(ROUTER, CODE_GENERATOR)
                 .addEdge(CODE_GENERATOR, CODE_QUALITY_CHECK)
-                .addConditionalEdges(CODE_QUALITY_CHECK,
-                        edge_async(this::routeAfterQualityCheck),
-                        Map.of(
-                                "build", PROJECT_BUILDER,
-                                "skip_build", END,
-                                "fail", CODE_GENERATOR,
-                                "stop", END
-                        ))
-                .addEdge(PROJECT_BUILDER, END)
-                .compile();
+                .addConditionalEdges(CODE_QUALITY_CHECK, edge_async(this::routeAfterQualityCheck),
+                        Map.of("build", PROJECT_BUILDER, "skip_build", END, "fail", CODE_GENERATOR, "stop", END))
+                .addEdge(PROJECT_BUILDER, END).compile();
+    }
+
+    private AsyncNodeAction<MessagesState<String>> observed(String id, String name,
+                                                            AsyncNodeAction<MessagesState<String>> action,
+                                                            Consumer<WorkflowStreamEvent> events,
+                                                            BooleanSupplier cancelled) {
+        return state -> {
+            checkCancelled(cancelled);
+            WorkflowContext before = WorkflowContext.getContext(state);
+            int retryCount = before == null ? 0 : before.getQualityCheckRetryCount();
+            events.accept(progress("step_started", id, name, "running", "正在" + name, retryCount));
+            return action.apply(state).thenApply(update -> {
+                checkCancelled(cancelled);
+                WorkflowContext after = WorkflowContext.getContext(new MessagesState<>(update));
+                String status = "completed";
+                String message = name + "已完成";
+                if (StrUtil.isNotBlank(after.getErrorMessage())) {
+                    events.accept(progress("step_completed", id, name, "failed", after.getErrorMessage(), retryCount));
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, after.getErrorMessage());
+                }
+                if (CODE_QUALITY_CHECK.equals(id)) {
+                    if (StrUtil.isNotBlank(after.getQualityCheckSkippedReason())) {
+                        status = "skipped";
+                        message = after.getQualityCheckSkippedReason();
+                    } else if (after.getQualityResult() == null || !Boolean.TRUE.equals(after.getQualityResult().getIsValid())) {
+                        if (after.getQualityCheckRetryCount() >= WorkflowContext.MAX_QUALITY_RETRY_COUNT) {
+                            events.accept(progress("step_completed", id, name, "failed", "代码质检失败，已达到最大重试次数", retryCount));
+                            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码质检失败，已达到最大重试次数");
+                        }
+                        status = "retrying";
+                        message = "质检未通过，准备第 " + (after.getQualityCheckRetryCount() + 1) + " 次修复";
+                    }
+                }
+                events.accept(progress("step_completed", id, name, status, message, after.getQualityCheckRetryCount()));
+                return update;
+            });
+        };
     }
 
     String routeAfterQualityCheck(MessagesState<String> state) {
         WorkflowContext context = WorkflowContext.getContext(state);
-        if (context == null) {
-            return "stop";
-        }
-        QualityResult qualityResult = context.getQualityResult();
-        if (qualityResult == null || !Boolean.TRUE.equals(qualityResult.getIsValid())) {
-            int retryCount = context.getQualityCheckRetryCount() == null ? 0 : context.getQualityCheckRetryCount();
-            if (retryCount >= WorkflowContext.MAX_QUALITY_RETRY_COUNT) {
-                context.setErrorMessage("代码质检失败，已达到最大重试次数");
-                return "stop";
-            }
-            log.warn("代码质检失败，返回代码生成节点重新生成");
-            return "fail";
+        if (context == null || StrUtil.isNotBlank(context.getErrorMessage())) return "stop";
+        QualityResult result = context.getQualityResult();
+        if (result == null || !Boolean.TRUE.equals(result.getIsValid())) {
+            return context.getQualityCheckRetryCount() >= WorkflowContext.MAX_QUALITY_RETRY_COUNT ? "stop" : "fail";
         }
         return routeBuildOrSkip(state);
     }
 
     String routeBuildOrSkip(MessagesState<String> state) {
         WorkflowContext context = WorkflowContext.getContext(state);
-        if (context == null || context.getGenerationType() == null) {
-            return "skip_build";
-        }
+        if (context == null || context.getGenerationType() == null) return "skip_build";
         return switch (context.getGenerationType()) {
             case VUE_PROJECT -> "build";
-            case HTML, MULTI_FILE -> {
-                context.setBuildResultDir(context.getGeneratedCodeDir());
-                yield "skip_build";
-            }
+            case HTML, MULTI_FILE -> "skip_build";
         };
     }
 
-    static String formatSseEvent(String eventType, Object data) {
-        return "event: " + eventType + "\n"
-                + "data: " + JSONUtil.toJsonStr(data) + "\n\n";
+    private static WorkflowContext initialContext(String prompt, Long appId, Long userId, CodeGenTypeEnum type) {
+        return WorkflowContext.builder().currentStep("初始化").originalPrompt(prompt)
+                .appId(appId).userId(userId).generationType(type).build();
     }
 
-    record WorkflowStreamEvent(String eventType, Object data) {
+    private static WorkflowStreamEvent progress(String event, String id, String name, String status, String message, int retryCount) {
+        return new WorkflowStreamEvent(event, Map.of("type", "workflow_progress", "id", id, "name", name,
+                "status", status, "message", message, "retryCount", retryCount));
     }
+
+    private static void checkCancelled(BooleanSupplier cancelled) {
+        if (cancelled.getAsBoolean()) throw new CancellationException("工作流已中断");
+    }
+
+    private static BusinessException workflowFailure(Throwable error) {
+        while (error.getCause() != null) error = error.getCause();
+        return error instanceof BusinessException business ? business :
+                new BusinessException(ErrorCode.SYSTEM_ERROR, "工作流执行失败：" + StrUtil.blankToDefault(error.getMessage(), "未知错误"));
+    }
+
+    private static void recordResult(ChatMemory memory, AtomicBoolean recorded, String content) {
+        if (recorded.compareAndSet(false, true)) memory.add(AiMessage.from(content));
+    }
+
+    static String formatSseEvent(String eventType, Object data) {
+        return "event: " + eventType + "\ndata: " + JSONUtil.toJsonStr(data) + "\n\n";
+    }
+
+    record WorkflowStreamEvent(String eventType, Map<String, Object> data) {}
 }

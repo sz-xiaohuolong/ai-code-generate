@@ -35,6 +35,7 @@ public class CodeQualityCheckNode {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 代码质量检查");
             context.setCurrentStep("代码质量检查");
+            context.setQualityCheckSkippedReason(null);
             QualityResult qualityResult;
             try {
                 String codeContent = readAndConcatenateCodeFiles(context.getGeneratedCodeDir());
@@ -48,6 +49,7 @@ public class CodeQualityCheckNode {
                     CodeQualityCheckService qualityCheckService = SpringContextUtil.getBean(CodeQualityCheckService.class);
                     qualityResult = qualityCheckService.checkCodeQuality(codeContent);
                     if (qualityResult == null || qualityResult.getIsValid() == null) {
+                        context.setQualityCheckSkippedReason("质检模型返回不完整，已跳过检查");
                         qualityResult = QualityResult.builder()
                                 .isValid(true)
                                 .errors(List.of())
@@ -56,6 +58,7 @@ public class CodeQualityCheckNode {
                     }
                 }
             } catch (Exception e) {
+                context.setQualityCheckSkippedReason("质检服务不可用，已跳过检查");
                 log.warn("代码质量检查异常，放行后续流程: {}", e.getMessage(), e);
                 qualityResult = QualityResult.builder()
                         .isValid(true)

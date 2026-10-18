@@ -1,6 +1,7 @@
 declare namespace API {
   type AppAddRequest = {
     initPrompt?: string
+    generationMode?: string
   }
 
   type AppAdminUpdateRequest = {
@@ -40,6 +41,7 @@ declare namespace API {
     cover?: string
     initPrompt?: string
     codeGenType?: string
+    generationMode?: string
     deployKey?: string
     deployedTime?: string
     priority?: number
@@ -146,6 +148,16 @@ declare namespace API {
     appId: number
   }
 
+  type executeWorkflowParams = {
+    prompt: string
+    appId: number
+  }
+
+  type executeWorkflowWithFluxParams = {
+    prompt: string
+    appId: number
+  }
+
   type getAppVOByIdByAdminParams = {
     id: number
   }
@@ -160,6 +172,12 @@ declare namespace API {
 
   type getUserVOByIdParams = {
     id: number
+  }
+
+  type ImageResource = {
+    category?: 'CONTENT' | 'LOGO' | 'ILLUSTRATION' | 'ARCHITECTURE'
+    description?: string
+    url?: string
   }
 
   type LoginUserVO = {
@@ -198,6 +216,12 @@ declare namespace API {
     totalPage?: number
     totalRow?: number
     optimizeCountQuery?: boolean
+  }
+
+  type QualityResult = {
+    isValid?: boolean
+    errors?: string[]
+    suggestions?: string[]
   }
 
   type ServerSentEventString = true
@@ -267,5 +291,22 @@ declare namespace API {
     userProfile?: string
     userRole?: string
     createTime?: string
+  }
+
+  type WorkflowContext = {
+    currentStep?: string
+    originalPrompt?: string
+    appId?: number
+    userId?: number
+    imageListStr?: string
+    imageList?: ImageResource[]
+    enhancedPrompt?: string
+    generationType?: 'HTML' | 'MULTI_FILE' | 'VUE_PROJECT'
+    generatedCodeDir?: string
+    buildResultDir?: string
+    qualityResult?: QualityResult
+    qualityCheckSkippedReason?: string
+    qualityCheckRetryCount?: number
+    errorMessage?: string
   }
 }

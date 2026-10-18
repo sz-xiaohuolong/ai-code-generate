@@ -5,6 +5,10 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppCard from '@/components/AppCard.vue'
 import { addApp, listFeaturedAppVoByPage, listMyAppVoByPage } from '@/api/appController'
+import { useGenerationModeStore } from '@/stores/generationMode'
+import { GENERATION_MODE_LABELS } from '@/utils/workflowProgress'
+
+const generationModeStore = useGenerationModeStore()
 
 const router = useRouter()
 const prompt = ref('')
@@ -90,7 +94,7 @@ const createApp = async () => {
   }
   creating.value = true
   try {
-    const res = await addApp({ initPrompt })
+    const res = await addApp({ initPrompt, generationMode: generationModeStore.defaultMode })
     if (res.data.code === 0 && res.data.data) {
       await router.push(`/app/chat/${res.data.data}`)
     } else {
@@ -132,6 +136,12 @@ onMounted(() => {
 
         <div class="creation-studio">
           <div class="prompt-box">
+            <div class="creation-mode-summary" role="status">
+              <strong>{{ GENERATION_MODE_LABELS[generationModeStore.defaultMode] }}</strong>
+              <span>{{ generationModeStore.defaultMode === 'workflow'
+                ? '分阶段生成，展示素材收集、代码质检与构建过程'
+                : '直接生成，通过对话持续完善应用' }}</span>
+            </div>
             <a-textarea
               v-model:value="prompt"
               aria-label="描述你想创建的应用"
@@ -272,6 +282,21 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.creation-mode-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 14px 20px 0;
+  color: var(--ui-ink-faint);
+  font-size: 12px;
+}
+
+.creation-mode-summary strong {
+  color: var(--ui-ink);
+  font-weight: 600;
+}
+
 .home-page {
   background: var(--ui-shell);
 }

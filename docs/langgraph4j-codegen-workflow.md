@@ -1,6 +1,8 @@
 # LangGraph4j 工作流特性实战开发说明
 
-本文档沉淀本次 LangGraph4j 工作流特性实战的开发逻辑，重点对应教程第五部分：条件边、循环边、并发图片收集、SSE 流式输出。
+本文档描述当前工作流模式的图编排、状态、记忆与流式协议。产品决策与验证分别以 `docs/vibe/releases/generation-modes/SPEC.md` 和 `VERIFICATION.md` 为准。
+
+顶部选择只影响新建应用，`app.generationMode` 在创建后固定。两种模式共用应用工作台与聊天入口，代码类型 HTML／MULTI_FILE／VUE_PROJECT 与模式独立。
 
 ## 1. 本次目标
 
@@ -32,12 +34,13 @@ flowchart TD
 
 ## 3. WorkflowContext 新增状态
 
-本次新增了两个与质量检查有关的字段：
+质量检查相关字段：
 
 | 字段 | 作用 |
 | --- | --- |
 | `qualityResult` | 保存代码质检 Agent 的结构化结果 |
 | `qualityCheckRetryCount` | 记录质检失败后的重新生成次数 |
+| `qualityCheckSkippedReason` | 质检异常降级时的明确原因，不能当作质检通过 |
 
 已有字段继续复用：
 
@@ -56,7 +59,7 @@ flowchart TD
 代码位置：
 
 - `CodeGenWorkflow#createWorkflow`
-- ##### `CodeGenWorkflow#routeBuildOrSkip`
+- `CodeGenWorkflow#routeBuildOrSkip`
 - `ProjectBuilderNode`
 
 原来所有生成类型都会进入 `ProjectBuilderNode`。但 HTML 和 MULTI_FILE 在 `CodeGeneratorNode` 中已经完成文件保存，不需要 npm install / build。
@@ -208,85 +211,33 @@ tmp/code_output/workflow_assets/app_{appId}/
 
 如果 `appId` 为空或小于等于 0，才会兜底到 `app_0`。
 
-## 7. SSE 流式输出
+## 7. SSE 流式输出与鉴权
 
-新增文件：
+正式入口为 `GET /api/app/chat/gen/code?appId=...&message=...`。应用服务从登录会话确认身份并校验归属，读取应用保存的模式。外层仍使用 `{d: chunk}`，正常结束发 `done`，异常发 `business-error`。
 
-- `WorkflowSseController`
-- `src/main/resources/static/workflow-sse.html`
+工作流 chunk 分为两类：
 
-核心方法：
-
-```java
-Flux<String> executeWorkflowWithFlux(String originalPrompt, Long appId, Long userId)
+```json
+{"type":"workflow_progress","id":"code_generator","name":"代码生成","status":"running","message":"正在代码生成","retryCount":0}
+{"type":"ai_response","data":"生成的文本或工具活动"}
 ```
 
-它内部仍然执行同一套 LangGraph4j 工作流，只是在每个节点执行完成后向前端发送一个 SSE 事件。
+节点执行前后均有真实进度，状态为 `running`、`completed`、`retrying`、`skipped`、`failed`。总体 `id=workflow` 完成才表示成功。重试启动时清空上一轮内容；断线、取消和失败均不展示成功预览。历史恢复要求末条 AI 消息包含服务端写入的明确完成标记。
 
-事件类型：
+演示页面为 `/api/workflow-sse.html`。接口要求已登录，并提供属于本人的工作流应用 `appId` 和 `prompt`，不接受客户端指定执行身份；与正式入口共用 `ai_chat` 限流键。
 
-| 事件 | 含义 |
+| 演示接口 | 返回 |
 | --- | --- |
-| `workflow_start` | 工作流开始 |
-| `step_completed` | 某个节点完成 |
-| `workflow_completed` | 工作流完成 |
-| `workflow_error` | 工作流异常 |
+| `GET /api/workflow/execute-flux?prompt=...&appId=...` | 命名事件 `workflow_start`、`step_started`、`step_completed`、`code_chunk`、`workflow_completed`、`workflow_error` |
+| `POST /api/workflow/execute?prompt=...&appId=...` | 完成后的路径、代码类型、质检重试次数及跳过原因摘要；失败抛出业务错误 |
 
-SSE 文本格式由 `CodeGenWorkflow#formatSseEvent` 统一生成：
+## 8. 正式历史与构建
 
-```text
-event: step_completed
-data: {"stepNumber":1,"currentStep":"图片收集"}
+`generateForApp` 从应用正式历史初始化本轮临时记忆。素材增强、工具消息和质检重试仅进入临时记忆；正式历史只写一次原始用户输入和最终 AI 结果。失败和手动中断也记录明确结果，刷新后保持错误状态。
 
-```
+工作流通过 `generateAndSaveCodeStreamForWorkflow` 复用生成门面，生成阶段只保存源码。Vue 质检后由 `ProjectBuilderNode` 构建一次，HTML／MULTI_FILE 显式跳过构建。截图在最终产物可用后触发。用户之后主动部署时再次构建 Vue，属于既有部署行为。
 
-测试页面访问路径：
-
-```text
-http://localhost:8123/api/workflow-sse.html
-```
-
-接口路径：
-
-```text
-GET /api/workflow/execute-flux?prompt=...&appId=...&userId=...
-```
-
-`appId` 和 `userId` 是可选参数。不传时会使用临时 appId，适合单纯测试；传入真实 appId 时，本地素材会进入对应的 `workflow_assets/app_{appId}` 目录。
-
-## 8. 核心调用链
-
-```mermaid
-sequenceDiagram
-    participant Frontend as SSE 测试页
-    participant Controller as WorkflowSseController
-    participant Workflow as CodeGenWorkflow
-    participant Graph as LangGraph4j
-    participant Image as ImageCollectorNode
-    participant Code as CodeGeneratorNode
-    participant Quality as CodeQualityCheckNode
-    participant Builder as ProjectBuilderNode
-
-    Frontend->>Controller: GET /workflow/execute-flux
-    Controller->>Workflow: executeWorkflowWithFlux(prompt, appId, userId)
-    Workflow-->>Frontend: workflow_start
-    Workflow->>Graph: stream(initialContext)
-    Graph->>Image: 图片规划和并发收集
-    Workflow-->>Frontend: step_completed(图片收集)
-    Graph->>Code: 复用 AiCodeGeneratorFacade 生成代码
-    Workflow-->>Frontend: step_completed(代码生成)
-    Graph->>Quality: 读取文件并调用质检 Agent
-    alt 质检失败且未超过重试上限
-        Quality-->>Code: fail
-        Code->>Code: 带错误反馈重新生成
-    else HTML / MULTI_FILE 质检通过
-        Quality-->>Graph: skip_build
-    else VUE_PROJECT 质检通过
-        Quality->>Builder: build
-        Builder->>Builder: npm install + npm run build
-    end
-    Workflow-->>Frontend: workflow_completed
-```
+取消会中断工作流等待线程，停止后续节点，并通过 TokenStream 的上下文 `StreamingHandle` 取消底层流；在工具执行前及最终构建前再次检查取消状态。已经开始的同步外部操作不能承诺瞬时撤销。
 
 ## 9. 测试说明
 

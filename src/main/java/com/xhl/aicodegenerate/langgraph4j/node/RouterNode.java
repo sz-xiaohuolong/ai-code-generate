@@ -27,6 +27,9 @@ public class RouterNode {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 智能路由");
             context.setCurrentStep("智能路由");
+            if (context.getGenerationType() != null) {
+                return WorkflowContext.saveContext(context);
+            }
             try {
                 AiCodeGenTypeRoutingService routingService = SpringContextUtil.getBean(AiCodeGenTypeRoutingService.class);
                 CodeGenTypeEnum generationType = routingService.routeCodeGenType(context.getOriginalPrompt());

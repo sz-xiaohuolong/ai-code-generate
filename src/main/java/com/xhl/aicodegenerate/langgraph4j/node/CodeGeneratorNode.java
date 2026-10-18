@@ -4,6 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
 import com.xhl.aicodegenerate.constant.AppConstant;
 import com.xhl.aicodegenerate.core.AiCodeGeneratorFacade;
+import com.xhl.aicodegenerate.core.handler.JsonMessageStreamHandler;
+import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import com.xhl.aicodegenerate.langgraph4j.model.QualityResult;
 import com.xhl.aicodegenerate.langgraph4j.state.WorkflowContext;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
@@ -33,6 +36,11 @@ public class CodeGeneratorNode {
     private static final Duration CODE_GENERATION_TIMEOUT = Duration.ofMinutes(15);
 
     public static AsyncNodeAction<MessagesState<String>> create() {
+        return create(chunk -> {}, null);
+    }
+
+    public static AsyncNodeAction<MessagesState<String>> create(Consumer<String> onContent,
+                                                                 ChatMemoryProvider memoryProvider) {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 代码生成");
@@ -53,16 +61,12 @@ public class CodeGeneratorNode {
             try {
                 AiCodeGeneratorFacade aiCodeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
                 AppChatMemoryId memoryId = new AppChatMemoryId(appId, userId);
+                var stream = aiCodeGeneratorFacade.generateAndSaveCodeStreamForWorkflow(
+                        userMessage, generationType, memoryId, memoryProvider);
                 if (generationType == CodeGenTypeEnum.VUE_PROJECT) {
-                    // Vue 工程依赖 TokenStream 工具调用实时写文件，所以继续走流式链路。
-                    aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, generationType, memoryId)
-                            .blockLast(CODE_GENERATION_TIMEOUT);
-                } else {
-                    // HTML / MULTI_FILE 在工作流里不需要实时展示流式片段，直接走结构化生成和保存。
-                    // 这样可以避开 SSE 长连接被底层 HTTP 客户端提前关闭后，doOnComplete 无法触发保存的问题。
-                    File savedDir = aiCodeGeneratorFacade.generateAndSaveCode(userMessage, generationType, memoryId);
-                    context.setGeneratedCodeDir(savedDir.getAbsolutePath());
+                    stream = new JsonMessageStreamHandler().handle(stream);
                 }
+                stream.doOnNext(onContent).blockLast(CODE_GENERATION_TIMEOUT);
             } catch (Exception e) {
                 log.error("代码生成节点异常: {}", e.getMessage(), e);
                 context.setErrorMessage("代码生成失败：" + e.getMessage());
@@ -90,9 +94,7 @@ public class CodeGeneratorNode {
 
     private static boolean isQualityCheckFailed(QualityResult qualityResult) {
         return qualityResult != null
-                && Boolean.FALSE.equals(qualityResult.getIsValid())
-                && qualityResult.getErrors() != null
-                && !qualityResult.getErrors().isEmpty();
+                && Boolean.FALSE.equals(qualityResult.getIsValid());
     }
 
     private static void appendList(StringBuilder builder, String title, List<String> items) {

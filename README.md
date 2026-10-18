@@ -45,7 +45,7 @@
 |---|------|------|
 | 🧠 | **LangGraph4j 图工作流编排** | 不满足于"一问一答"的 LLM 调用，用 **LangGraph4j + MessagesStateGraph** 把"图片收集 → 提示词增强 → 智能路由 → 代码生成 → 代码质检 → 项目构建"编排成**有状态、有条件边、有回环重试**的 Agent 工作流，质检不过自动回到生成节点重新生成（最多 2 次）。 |
 | 🗂️ | **声明式 AI 服务 + 动态代理工厂** | 基于 **LangChain4j AiServices**，`AiCodeGeneratorService` 接口零实现类，运行时动态生成代理；按生成类型自动装配不同的模型、工具、记忆与护栏。 |
-| 🎨 | **三种生成模式自适应** | `原生 HTML / 原生多文件 / Vue 工程` 三种模式，由 AI 路由节点智能选择；Vue 工程模式挂载 **5 个文件读写工具**（Write/Read/Modify/Delete/DirRead），LLM 通过**工具调用逐文件落盘**，完成后自动 `npm install + build`。 |
+| 🎨 | **三种代码类型自适应** | `原生 HTML / 原生多文件 / Vue 工程` 三种代码类型，由 AI 路由节点智能选择；Vue 工程模式挂载 **5 个文件读写工具**（Write/Read/Modify/Delete/DirRead），LLM 通过**工具调用逐文件落盘**，完成后自动 `npm install + build`。 |
 | ⚡ | **Reactor + SSE 全链路流式** | 前端 EventSource 消费后端 `Flux<ServerSentEvent>`，代码逐 token 打字机输出；Vue 模式下还能实时推送**工具调用进度**（Thinking / ToolCall / ToolResult）。 |
 | 🛡️ | **AI 安全与成本控制体系** | 输入侧 **PromptSafetyInputGuardrail**（防注入 / 敏感词 / 超长）、输出侧 **RetryOutputGuardrail**、**Redisson 分布式令牌桶限流**（按用户 / IP / API 三级）、幻觉工具调用兜底。 |
 | 🧠💾 | **DB 事实源 + Redis 缓存的对话记忆** | `DatabaseLoadingChatMemoryStore`：**写先落 DB 再写 Redis，读优先 Redis，缺失即从 DB 恢复**，多轮连续生成上下文不丢、不漂移；按 `AppChatMemoryId(appId, userId)` 隔离。 |
@@ -58,7 +58,8 @@
 
 - 📝 **应用（App）管理**：用户注册"应用"并填写初始化 Prompt，管理自己的应用列表（增删改查），管理员可管理全部应用。
 - 💬 **AI 对话式生成代码**：在应用内连续对话，AI 根据对话历史（多轮记忆）持续迭代生成/修改代码。
-- 🖥️ **三种生成模式**：
+- 🔀 **标准模式／工作流模式**：顶部选择作为新建默认偏好；应用创建后固定模式，打开历史应用时展示其自身模式。标准模式直接对话生成，工作流模式展示素材收集、提示增强、代码生成、质检重试和按需构建的真实过程。
+- 🖥️ **三种代码类型**（与生成模式独立）：
   - `原生 HTML` —— 单文件落地，开箱即用；
   - `原生多文件` —— 拆分为 `index.html / style.css / script.js`；
   - `Vue 工程` —— 完整 Vue3 工程化项目，工具调用逐文件生成 + 自动构建。
@@ -160,7 +161,7 @@ flowchart TB
     SSE --> CTL
     Axios --> CTL
     CTL --> SVC
-    SVC --> Facade
+    SVC --> Facade & Graph
     Facade --> Parser & Saver & Handler & Builder
     Facade --> Factory
     Factory --> AiSvc & Routing & Memory & Tools
@@ -210,9 +211,9 @@ flowchart TD
     end
 ```
 
-> 执行过程通过 **SSE 事件**（`workflow_start` / `step_completed` / `workflow_completed` / `workflow_error`）实时推送到前端；`CodeGenWorkflow#getMermaidGraph()` 甚至可以动态输出工作流图本身。
+> 两种模式共用 `/api/app/chat/gen/code`，工作流在原有 `{d: chunk}` 中增加 `workflow_progress`，同时流式输出内容。质检不可用明确显示跳过；重试耗尽或构建失败返回错误。内部增强和重试使用临时记忆，正式历史只保存一次原始输入和最终结果。演示接口另提供命名 SSE 事件，要求登录及应用归属。
 
-### 传统 SSE 对话链路（老链路）
+### 标准模式 SSE 对话链路
 
 ```mermaid
 sequenceDiagram
@@ -374,6 +375,14 @@ ai-code-generate/
 mysql -uroot -p < sql/create_table.sql
 ```
 
+已有数据库升级时，先执行新增模式字段的幂等迁移：
+
+```bash
+mysql -uroot -p < sql/migrations/20261018_generation_mode.sql
+```
+
+历史应用自动归为标准模式。回退旧代码可以保留该列；恢复新版前避免用旧代码继续编辑工作流应用。需求与验证记录见 [generation-modes](docs/vibe/releases/generation-modes/SPEC.md)。
+
 ### 2️⃣ 配置 LLM 与本地环境
 
 复制并编辑本地配置文件（已被 gitignore，不会泄露密钥）：
@@ -414,6 +423,7 @@ yarn dev          # Vite dev server（HMR）
 ### ⚙️ 常用脚本（前端）
 
 ```bash
+yarn test           # 模式与进度回归（需要 Node.js 22.6+）
 yarn build          # 类型检查 + 生产构建
 yarn lint           # ESLint 自动修复
 yarn format         # Prettier
@@ -436,7 +446,7 @@ yarn openapi2ts     # 后端改动后重新生成 TS API 客户端
 | 生成 | `GET /api/app/chat/gen/code?appId&message` | **SSE 流式对话生成代码**（核心） |
 | 部署 | `POST /api/app/deploy` | 一键部署，返回访问 URL |
 | 下载 | `GET /api/app/download/{appId}` | 源码打包 zip 下载 |
-| 工作流 | `POST /api/workflow/execute` · `GET /api/workflow/execute-flux` | **LangGraph4j 图工作流**（同步 / SSE） |
+| 工作流 | `POST /api/workflow/execute` · `GET /api/workflow/execute-flux` | **LangGraph4j 图工作流**（同步 / SSE；登录、本人的工作流应用） |
 | 静态资源 | `GET /api/static/{deployKey}/**` | 预览 / 部署产物访问 |
 | 健康检查 | `GET /api/health` | 存活探针 |
 
@@ -446,7 +456,8 @@ yarn openapi2ts     # 后端改动后重新生成 TS API 客户端
 
 - [x] 用户体系 + 角色鉴权（`@AuthCheck`）
 - [x] 应用管理 + 精选广场 + Redis 缓存
-- [x] 三种生成模式（HTML / MultiFile / Vue 工程）
+- [x] 标准模式／工作流模式，应用创建后固定
+- [x] 三种代码类型（HTML / MultiFile / Vue 工程）
 - [x] SSE 流式生成 + 工具调用实时进度
 - [x] 部署 / 下载 / 可视化编辑
 - [x] LangGraph4j Agent 工作流（图片收集 → 质检 → 构建闭环）

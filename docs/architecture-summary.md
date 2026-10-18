@@ -4,7 +4,7 @@
 
 ## 1. 项目概览
 
-AI 驱动的代码生成平台：用户注册"应用"（App）并填写提示词，系统选择生成类型（原生 HTML / 多文件 / Vue 工程），由大模型生成完整前端代码，代码落盘后可**预览**、**部署**、**下载**；对话历史持久化以支持多轮连续生成。
+AI 驱动的代码生成平台：用户注册"应用"（App）并填写提示词，应用固定选择标准模式或工作流模式，系统另行选择代码类型（原生 HTML / 多文件 / Vue 工程），由大模型生成完整前端代码，代码落盘后可**预览**、**部署**、**下载**；对话历史持久化以支持多轮连续生成。
 
 - **后端**：Java 21 · Spring Boot 3.5 · Maven · MyBatis-Flex ORM · LangChain4j（LLM 抽象）· LangGraph4j（图工作流编排）· WebFlux/Reactor（流式 SSE）
 - **前端**：Vue 3 · TypeScript · Vite · Ant Design Vue · Pinia · Vue Router
@@ -87,7 +87,8 @@ flowchart TB
 
     %% 后端内部
     AppCtl --> AppSvc
-    WorkflowCtl --> Workflow
+    WorkflowCtl --> AppSvc
+    AppSvc --> Workflow
     AppSvc --> Facade
     Facade --> AiFactory & Parser & Saver & Handler
     AiFactory --> AiSvc & RouterSvc & Memory & Tools
@@ -145,7 +146,7 @@ flowchart LR
 
 ## 4. 代码生成核心链路（Chat 路径，SSE）
 
-前端 `AppChatPage` 通过 `EventSource` 调用 `GET /api/app/chat/gen/code?appId&message`，后端返回 SSE 流：
+前端 `AppChatPage` 通过 `EventSource` 调用 `GET /api/app/chat/gen/code?appId&message`。`AppService` 校验登录与应用归属后，读取持久化 `generationMode` 分流；旧记录缺省标准模式。下图为标准模式；工作流模式也保留 `{d: chunk}`、`done` 和 `business-error`，在 chunk 中增加 `workflow_progress` 及生成内容。
 
 ```mermaid
 sequenceDiagram
@@ -177,16 +178,16 @@ sequenceDiagram
     Note over S,DB: 失败时走"无记忆 raw 文本"兜底解析
 ```
 
-## 5. LangGraph4j 工作流链路（新架构）
+## 5. 工作流模式链路
 
-`WorkflowSseController (/workflow/execute | /execute-flux)` 驱动 `CodeGenWorkflow`，用 `MessagesStateGraph` 编排 6 个节点，`WorkflowContext` 在 `MessagesState` 中流转：
+`AppService.chatToGenCode` 按应用模式驱动 `CodeGenWorkflow`；演示 `WorkflowSseController (/workflow/execute | /execute-flux)` 也复用应用服务与用户限流键，用 `MessagesStateGraph` 编排 6 个节点，`WorkflowContext` 在 `MessagesState` 中流转：
 
 ```mermaid
 flowchart TD
     START([START]) --> IC["图片收集 ImageCollectorNode<br/>AI 规划 + CompletableFuture 并发<br/>图片搜索 / Logo 占位 / Kroki 架构图"]
     IC --> PE["提示词增强 PromptEnhancerNode<br/>素材清单追加进提示词"]
     PE --> RT["智能路由 RouterNode<br/>AiCodeGenTypeRoutingService<br/>失败默认 HTML"]
-    RT --> CG["代码生成 CodeGeneratorNode<br/>复用 AiCodeGeneratorFacade<br/>HTML/MULTI_FILE 同步保存<br/>VUE_PROJECT 走 TokenStream"]
+    RT --> CG["代码生成 CodeGeneratorNode<br/>复用 AiCodeGeneratorFacade<br/>HTML/MULTI_FILE 流式完成后保存<br/>VUE_PROJECT 走 TokenStream"]
     CG --> QC["代码质量检查 CodeQualityCheckNode<br/>拼接代码文件 → 质检模型 → QualityResult"]
     QC -->|"fail 且重试 < 2"| CG
     QC -->|"fail 且重试 >= 2 (stop)"| END([END])
@@ -201,7 +202,9 @@ flowchart TD
     end
 ```
 
-工作流执行结果（`generatedCodeDir` / `buildResultDir` / `errorMessage`）通过 SSE 事件（`workflow_start` / `step_completed` / `workflow_completed` / `workflow_error`）实时推送给前端；`CodeGenWorkflow#getMermaidGraph()` 还能动态输出图本身。
+节点观察器在真实执行前后发送 `running/completed/retrying/skipped/failed`。生成阶段只落盘；Vue 在质检结束后构建一次，静态页面显式跳过构建。质检异常记录跳过原因，重试耗尽、生成失败和构建失败阻断成功状态。
+
+内部增强与重试使用从正式历史初始化的临时记忆，正式历史只记录一次原始用户输入及最终结果。取消会中断等待线程并向真实 TokenStream 传播取消，阻止后续节点与迟到构建。前端仅在收到工作流完成事件或历史末条明确完成标记后显示新预览。
 
 ## 6. 前端架构
 
@@ -247,7 +250,7 @@ flowchart TB
 | 存储 | 用途 | 说明 |
 | --- | --- | --- |
 | MySQL `user` | 账号、角色（user/admin） | 密码、头像、简介 |
-| MySQL `app` | 注册的应用 | `initPrompt`、`codeGenType`、`deployKey`（唯一）、`priority`（精选=99）、`userId` |
+| MySQL `app` | 注册的应用 | `initPrompt`、`generationMode`（创建后固定）、`codeGenType`、`deployKey`（唯一）、`priority`（精选=99）、`userId` |
 | MySQL `chat_history` | 对话历史 | `messageType`（user/ai）、`appId`、`userId`，复合索引 `(appId, createTime)` 支持游标分页 |
 | Redis | Spring Session（30 天 TTL） | 登录态 |
 | Redis | LangChain4j ChatMemory | `DatabaseLoadingChatMemoryStore` 包装：**写先落 DB 再写 Redis**；**读优先 Redis，缺失/不一致时从 DB 恢复**（DB 为事实源） |
@@ -256,10 +259,10 @@ flowchart TB
 
 ## 8. 关键设计要点
 
-1. **双代码生成链路**：老链路（Chat SSE，按 App 类型直连 AI 服务）与新链路（LangGraph4j 图工作流）并存；工作流节点刻意**复用** `AiCodeGeneratorFacade`、`VueProjectBuilder`、`AiCodeGenTypeRoutingService` 等现有组件，而不是重写。
+1. **双代码生成链路**：标准模式（按 App 代码类型直连 AI 服务）与工作流模式（LangGraph4j 图编排）共用 Chat SSE 入口；工作流节点刻意**复用** `AiCodeGeneratorFacade`、`VueProjectBuilder`、`AiCodeGenTypeRoutingService` 等现有组件，而不是重写。
 2. **策略/模板模式**：`CodeParserExecutor`、`CodeFileSaverExecutor`、`StreamHandlerExecutor` 都按 `CodeGenTypeEnum` 分派到具体实现；保存器基于模板方法（`CodeFileSaverTemplate`）。
 3. **声明式 AI 服务**：`AiCodeGeneratorService` 等接口由 LangChain4j `AiServices` 在运行时生成动态代理，提示词放在 `src/main/resources/prompt/`；`VUE_PROJECT` 模式额外挂载文件读写工具（最多 20 次顺序工具调用），并切换到推理型流式模型。
-4. **容错兜底**：结构化输出解析失败 → 走无记忆 raw 文本 + 本地 `CodeParser` 解析；工作流路由失败默认 HTML；质检失败最多重试 2 次；质检服务异常放行。
+4. **容错兜底**：结构化输出解析失败 → 走无记忆 raw 文本 + 本地 `CodeParser` 解析；工作流路由失败默认 HTML；质检失败最多重试 2 次；质检服务异常显式标记跳过后放行。
 5. **记忆一致性**：ChatMemory 采用"DB 事实源 + Redis 缓存"，`AppChatMemoryId(appId, userId)` 隔离不同应用/用户的上下文；工具调用产生的运行时消息（ToolExecutionResult 等）不落业务历史表。
 6. **鉴权**：后端 `@AuthCheck(mustRole=ADMIN_ROLE)` + AOP 拦截；前端路由守卫双保险；App 归属校验（本人或管理员）在 Service/Controller 层。
 7. **可观测/文档**：Knife4j（`/api/doc.html`）；前端 API 客户端由 `yarn openapi2ts` 从 OpenAPI 规范自动生成。
