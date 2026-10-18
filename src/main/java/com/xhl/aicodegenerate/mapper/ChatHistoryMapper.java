@@ -9,5 +9,12 @@ import com.xhl.aicodegenerate.entity.ChatHistory;
  * @author <a href="https://github.com/sz-xiaohuolong">不会喷火的小火龙</a>
  */
 public interface ChatHistoryMapper extends BaseMapper<ChatHistory> {
+    /** 任务的稳定主键使中断后的补记不会插入重复聊天。 */
+    @org.apache.ibatis.annotations.Insert("""
+        INSERT INTO chat_history (id, message, messageType, appId, userId, createTime)
+        VALUES (#{id}, #{message}, #{messageType}, #{appId}, #{userId}, #{createTime})
+        ON DUPLICATE KEY UPDATE id = id
+        """)
+    int insertTaskMessage(ChatHistory message);
 
 }

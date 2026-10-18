@@ -60,13 +60,21 @@ public class CodeGeneratorNode {
                     + appId);
             try {
                 AiCodeGeneratorFacade aiCodeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
-                AppChatMemoryId memoryId = new AppChatMemoryId(appId, userId);
+                AppChatMemoryId memoryId = new AppChatMemoryId(appId, userId, context.getTaskId());
+                if (context.getTaskId() != null) {
+                    var execution = com.xhl.aicodegenerate.generation.GenerationExecution.require(context.getTaskId());
+                    execution.checkActive(); context.setGeneratedCodeDir(execution.root().toString());
+                }
                 var stream = aiCodeGeneratorFacade.generateAndSaveCodeStreamForWorkflow(
                         userMessage, generationType, memoryId, memoryProvider);
                 if (generationType == CodeGenTypeEnum.VUE_PROJECT) {
                     stream = new JsonMessageStreamHandler().handle(stream);
                 }
-                stream.doOnNext(onContent).blockLast(CODE_GENERATION_TIMEOUT);
+                if (context.getTaskId() != null) {
+                    var execution = com.xhl.aicodegenerate.generation.GenerationExecution.require(context.getTaskId());
+                    stream.doOnSubscribe(subscription -> execution.onCancel(subscription::cancel))
+                            .doOnNext(onContent).blockLast(execution.remaining());
+                } else stream.doOnNext(onContent).blockLast(CODE_GENERATION_TIMEOUT);
             } catch (Exception e) {
                 log.error("代码生成节点异常: {}", e.getMessage(), e);
                 context.setErrorMessage("代码生成失败：" + e.getMessage());

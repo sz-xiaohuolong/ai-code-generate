@@ -37,22 +37,11 @@ public class FileReadTool extends BaseTool {
             String relativeFilePath,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        try {
-            Long appId = memoryId.getAppId();
-            Path path = Paths.get(relativeFilePath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeFilePath);
-            }
+        return FileToolSupport.execute(memoryId, relativeFilePath, path -> {
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
                 return "错误：文件不存在或不是文件 - " + relativeFilePath;
             }
             return Files.readString(path);
-        } catch (IOException e) {
-            String errorMessage = "读取文件失败: " + relativeFilePath + ", 错误: " + e.getMessage();
-            log.error(errorMessage, e);
-            return errorMessage;
-        }
+        });
     }
 }

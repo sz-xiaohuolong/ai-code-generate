@@ -30,6 +30,8 @@ class WorkflowSseControllerSecurityTest {
     @Mock AppService appService;
     @Mock UserService userService;
     @Mock CodeGenWorkflow codeGenWorkflow;
+    @Mock com.xhl.aicodegenerate.generation.GenerationTaskService generationTasks;
+    @Mock com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
     @InjectMocks WorkflowSseController controller;
     private MockMvc mvc;
 
@@ -65,9 +67,12 @@ class WorkflowSseControllerSecurityTest {
         when(userService.getLoginUser(any())).thenReturn(owner);
         when(appService.getById(1L)).thenReturn(App.builder().id(1L).userId(1L)
                 .generationMode("workflow").codeGenType("html").build());
-        when(appService.chatToGenCode(1L, "作品集", owner)).thenReturn(Flux.just(
-                "{\"type\":\"workflow_progress\",\"id\":\"code_quality_check\",\"status\":\"skipped\",\"message\":\"质检不可用，已跳过检查\"}",
-                "{\"type\":\"workflow_progress\",\"id\":\"workflow\",\"status\":\"completed\"}"));
+        var task = new com.xhl.aicodegenerate.generation.GenerationTask(); task.setId("task");
+        task.setStatus(com.xhl.aicodegenerate.generation.TaskStatus.SUCCEEDED);
+        task.setSteps(java.util.List.of(java.util.Map.of("id", "code_quality_check", "status", "skipped", "message", "质检不可用，已跳过检查")));
+        when(generationTasks.start(1L, "作品集", null, owner)).thenReturn(task);
+        when(generationTasks.events("task", owner)).thenReturn(Flux.just(task));
+        when(generationWorkspace.published(1L, "html")).thenReturn(java.nio.file.Path.of("tmp/published"));
         mvc.perform(post("/workflow/execute").param("prompt", "作品集").param("appId", "1"))
                 .andExpect(jsonPath("$.qualityCheckSkippedReason").value("质检不可用，已跳过检查"));
     }

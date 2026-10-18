@@ -128,15 +128,15 @@ public class AiCodeGeneratorFacade {
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, memoryId.getAppId(), finalizeProject);
+                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, memoryId, finalizeProject);
             }
             case MULTI_FILE -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId.getAppId(), finalizeProject);
+                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId, finalizeProject);
             }
             case VUE_PROJECT -> {
                 TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeTokenStream(memoryId, userMessage);
-                yield tokenStreamToFlux(tokenStream, memoryId.getAppId(), finalizeProject);
+                yield tokenStreamToFlux(tokenStream, memoryId, finalizeProject);
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
@@ -153,7 +153,8 @@ public class AiCodeGeneratorFacade {
      * 下游再按生成类型选择不同流处理器。
      * </p>
      */
-    private Flux<String> tokenStreamToFlux(TokenStream tokenStream, Long appId, boolean finalizeProject) {
+    private Flux<String> tokenStreamToFlux(TokenStream tokenStream, AppChatMemoryId memoryId, boolean finalizeProject) {
+        Long appId = memoryId.getAppId();
         return Flux.create(sink -> {
             AtomicBoolean completed = new AtomicBoolean(false);
             AtomicReference<StreamingHandle> activeHandle = new AtomicReference<>();
@@ -179,6 +180,7 @@ public class AiCodeGeneratorFacade {
                         else emit(sink, completed, toToolRequestMessage(partialToolCall));
                     })
                     .beforeToolExecution(beforeToolExecution -> {
+                        checkTask(memoryId);
                         if (sink.isCancelled()) throw new CancellationException("生成已中断，停止后续工具执行");
                         emit(sink, completed, toToolRequestMessage(beforeToolExecution));
                     })
@@ -193,7 +195,8 @@ public class AiCodeGeneratorFacade {
                                     triggerScreenshot(appId, CodeGenTypeEnum.VUE_PROJECT, new File(projectPath));
                                 }
                             } catch (Exception e) {
-                                log.error("Vue 项目同步构建或触发封面截图异常: {}", e.getMessage(), e);
+                                sink.error(e);
+                                return;
                             }
                             sink.complete();
                         }
@@ -205,6 +208,10 @@ public class AiCodeGeneratorFacade {
                     })
                     .start();
         }, FluxSink.OverflowStrategy.BUFFER);
+    }
+
+    private void checkTask(AppChatMemoryId memoryId) {
+        if (memoryId.getTaskId() != null) com.xhl.aicodegenerate.generation.GenerationExecution.require(memoryId.getTaskId()).checkActive();
     }
 
     private CodeGenStreamMessage toToolRequestMessage(PartialToolCall partialToolCall) {
@@ -243,7 +250,7 @@ public class AiCodeGeneratorFacade {
         String projectPath = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, VUE_PROJECT_DIR_PREFIX + appId).toString();
         boolean buildSuccess = vueProjectBuilder.buildProject(projectPath);
         if (!buildSuccess) {
-            log.warn("Vue 项目同步构建失败: {}", projectPath);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "Vue 项目构建失败");
         }
     }
 
@@ -254,7 +261,7 @@ public class AiCodeGeneratorFacade {
      * @param codeGenType 代码生成类型
      * @return 流式响应
      */
-    private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, Long appId,
+    private Flux<String> processCodeStream(Flux<String> codeStream, CodeGenTypeEnum codeGenType, AppChatMemoryId memoryId,
                                             boolean finalizeProject) {
         StringBuilder codeBuilder = new StringBuilder();
         return codeStream.doOnNext(chunk -> {
@@ -267,10 +274,15 @@ public class AiCodeGeneratorFacade {
                 // 使用执行器解析代码
                 Object parsedResult = CodeParserExecutor.executeParser(completeCode, codeGenType);
                 // 使用执行器保存代码
-                File savedDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, appId);
+                checkTask(memoryId);
+                java.nio.file.Path directory = memoryId.getTaskId() == null ? null : com.xhl.aicodegenerate.generation.GenerationExecution.require(memoryId.getTaskId()).root();
+                File savedDir = directory == null
+                        ? CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, memoryId.getAppId(), null)
+                        : com.xhl.aicodegenerate.generation.GenerationExecution.require(memoryId.getTaskId()).files(
+                                () -> CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType, memoryId.getAppId(), directory));
                 log.info("保存成功，路径为：" + savedDir.getAbsolutePath());
                 if (finalizeProject) {
-                    triggerScreenshot(appId, codeGenType, savedDir);
+                    triggerScreenshot(memoryId.getAppId(), codeGenType, savedDir);
                 }
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());

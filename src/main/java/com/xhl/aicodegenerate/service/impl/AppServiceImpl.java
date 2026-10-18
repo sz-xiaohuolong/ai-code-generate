@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
+    @Resource private com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
+
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "appName", "cover", "initPrompt", "codeGenType", "deployKey", "deployedTime",
@@ -306,6 +308,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
         // 2. 查询应用信息
         App app = this.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         // 3. 验证用户是否有权限访问该应用，仅本人可以部署应用
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
@@ -319,7 +322,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 5. 获取代码生成类型
         String codeGenType = app.getCodeGenType();
         String sourceDirName = codeGenType + "_" + appId;
-        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        String sourceDirPath = generationWorkspace.published(appId, codeGenType).toString();
 
         // 6. 检查路径是否存在
         File sourceDir = new File(sourceDirPath);
@@ -331,8 +334,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
         if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
             // Vue 项目需要构建
-            boolean buildSuccess = vueProjectBuilder.buildProject(sourceDirPath);
-            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败，请检查代码和依赖");
+            // 部署消费最近一次通过交付检查的产物，不在成功源码目录重新构建。
             // 检查 dist 目录是否存在
             File distDir = new File(sourceDirPath, "dist");
             ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "Vue 项目构建完成但未生成 dist 目录");

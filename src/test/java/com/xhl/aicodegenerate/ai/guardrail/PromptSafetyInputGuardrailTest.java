@@ -21,10 +21,10 @@ class PromptSafetyInputGuardrailTest {
     }
 
     @Test
-    void shouldRejectInputLongerThanOneThousandCharacters() {
-        InputGuardrailResult result = validate("a".repeat(1001));
+    void shouldRejectInputLongerThanTwentyThousandCharacters() {
+        InputGuardrailResult result = validate("a".repeat(20_001));
 
-        assertFatal(result, "输入内容过长，不要超过 1000 字");
+        assertFatal(result, "输入内容过长，不要超过 20000 字");
     }
 
     @ParameterizedTest

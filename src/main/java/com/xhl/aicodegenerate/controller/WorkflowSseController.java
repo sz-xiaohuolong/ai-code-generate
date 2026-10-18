@@ -30,6 +30,8 @@ import java.util.Map;
 @RequestMapping("/workflow")
 public class WorkflowSseController {
     @Resource private AppService appService;
+    @Resource private com.xhl.aicodegenerate.generation.GenerationTaskService generationTasks;
+    @Resource private com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
     @Resource private UserService userService;
 
     @PostMapping("/execute")
@@ -38,21 +40,20 @@ public class WorkflowSseController {
                                            HttpServletRequest request) {
         User user = userService.getLoginUser(request);
         App app = requireWorkflowApp(prompt, appId, user);
-        var events = appService.chatToGenCode(appId, prompt, user).collectList().block(Duration.ofMinutes(20));
+        var started = generationTasks.start(appId, prompt, request.getParameter("clientRequestId"), user);
+        var task = generationTasks.events(started.getId(), user).blockLast(Duration.ofMinutes(21));
+        if (task == null || task.getStatus() != com.xhl.aicodegenerate.generation.TaskStatus.SUCCEEDED)
+            throw new com.xhl.aicodegenerate.exception.BusinessException(ErrorCode.OPERATION_ERROR, task == null ? "任务未完成" : task.getMessage());
         String skippedReason = null;
         int retryCount = 0;
-        if (events != null) {
-            for (String chunk : events) {
-                var event = JSONUtil.parseObj(chunk);
-                if ("workflow_progress".equals(event.getStr("type"))
-                        && "code_quality_check".equals(event.getStr("id"))) {
-                    skippedReason = "skipped".equals(event.getStr("status")) ? event.getStr("message") : null;
-                    retryCount = event.getInt("retryCount", 0);
-                }
+        for (var step : task.getSteps()) {
+            if ("code_quality_check".equals(step.get("id"))) {
+                if ("skipped".equals(step.get("status"))) skippedReason = String.valueOf(step.get("message"));
+                if (step.get("retryCount") instanceof Number count) retryCount = count.intValue();
             }
         }
         CodeGenTypeEnum type = CodeGenTypeEnum.getEnumByValue(app.getCodeGenType());
-        String directory = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR, app.getCodeGenType() + "_" + appId).toString();
+        String directory = generationWorkspace.published(appId, app.getCodeGenType()).toString();
         return WorkflowContext.builder().appId(appId).userId(user.getId()).originalPrompt(prompt).generationType(type)
                 .currentStep("工作流已完成").generatedCodeDir(directory)
                 .qualityCheckSkippedReason(skippedReason).qualityCheckRetryCount(retryCount)
@@ -66,20 +67,8 @@ public class WorkflowSseController {
                                                                 HttpServletRequest request) {
         User user = userService.getLoginUser(request);
         requireWorkflowApp(prompt, appId, user);
-        return appService.chatToGenCode(appId, prompt, user).<ServerSentEvent<String>>handle((chunk, sink) -> {
-            var data = JSONUtil.parseObj(chunk);
-            String event = "code_chunk";
-            if ("workflow_progress".equals(data.getStr("type"))) {
-                if ("workflow".equals(data.getStr("id"))) {
-                    if ("failed".equals(data.getStr("status"))) return;
-                    event = "completed".equals(data.getStr("status")) ? "workflow_completed" : "workflow_start";
-                } else {
-                    event = "running".equals(data.getStr("status")) ? "step_started" : "step_completed";
-                }
-            }
-            sink.next(ServerSentEvent.builder(JSONUtil.toJsonStr(data)).event(event).build());
-        }).onErrorResume(error -> Flux.just(ServerSentEvent.<String>builder()
-                .event("workflow_error").data(JSONUtil.toJsonStr(Map.of("message", error.getMessage()))).build()));
+        var task = generationTasks.start(appId, prompt, request.getParameter("clientRequestId"), user);
+        return GenerationTaskController.snapshots(generationTasks.events(task.getId(), user));
     }
 
     private App requireWorkflowApp(String prompt, Long appId, User user) {

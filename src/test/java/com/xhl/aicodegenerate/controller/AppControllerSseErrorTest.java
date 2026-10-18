@@ -21,15 +21,19 @@ class AppControllerSseErrorTest {
     @Test
     void shouldConvertDeferredGuardrailFailureToBusinessErrorEvent() {
         AppService appService = mock(AppService.class);
+        var tasks = mock(com.xhl.aicodegenerate.generation.GenerationTaskService.class);
+        var task = new com.xhl.aicodegenerate.generation.GenerationTask(); task.setId("task");
         UserService userService = mock(UserService.class);
         HttpServletRequest request = mock(HttpServletRequest.class);
         User user = new User();
         user.setId(1L);
         when(userService.getLoginUser(request)).thenReturn(user);
-        when(appService.chatToGenCode(1L, "正常提示词", user))
+        when(tasks.start(1L, "正常提示词", null, user)).thenReturn(task);
+        when(tasks.events("task", user))
                 .thenReturn(Flux.error(new InputGuardrailException("检测到恶意输入，请求被拒绝")));
         AppController controller = new AppController();
         ReflectionTestUtils.setField(controller, "appService", appService);
+        ReflectionTestUtils.setField(controller, "generationTasks", tasks);
         ReflectionTestUtils.setField(controller, "userService", userService);
 
         List<ServerSentEvent<String>> events = controller

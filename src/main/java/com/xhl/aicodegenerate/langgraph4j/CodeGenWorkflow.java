@@ -1,5 +1,7 @@
 package com.xhl.aicodegenerate.langgraph4j;
 
+import com.xhl.aicodegenerate.ai.AppChatMemoryId;
+
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.xhl.aicodegenerate.exception.BusinessException;
@@ -68,6 +70,11 @@ public class CodeGenWorkflow {
     /** 应用入口：内部记忆隔离，正式历史保留一次原始输入和最终结果。 */
     public Flux<String> generateForApp(String prompt, Long appId, Long userId, CodeGenTypeEnum type,
                                        ChatMemory persistentMemory) {
+        return generateForTask(prompt, new AppChatMemoryId(appId, userId), type, persistentMemory);
+    }
+
+    public Flux<String> generateForTask(String prompt, AppChatMemoryId memoryId, CodeGenTypeEnum type, ChatMemory persistentMemory) {
+        Long appId = memoryId.getAppId(), userId = memoryId.getUserId();
         return Flux.defer(() -> {
             ChatMemory runMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
             runMemory.add(persistentMemory.messages());
@@ -75,7 +82,7 @@ public class CodeGenWorkflow {
             StringBuilder finalContent = new StringBuilder();
             AtomicBoolean recorded = new AtomicBoolean();
             AtomicBoolean qualitySkipped = new AtomicBoolean();
-            return executeWorkflowEvents(prompt, appId, userId, type, id -> runMemory)
+            return executeWorkflowEvents(prompt, appId, userId, type, id -> runMemory, memoryId.getTaskId())
                     .<String>handle((event, sink) -> {
                         if ("step_started".equals(event.eventType())
                                 && CODE_GENERATOR.equals(event.data().get("id"))) {
@@ -134,11 +141,18 @@ public class CodeGenWorkflow {
 
     private Flux<WorkflowStreamEvent> executeWorkflowEvents(String prompt, Long appId, Long userId,
                                                             CodeGenTypeEnum type, ChatMemoryProvider memoryProvider) {
+        return executeWorkflowEvents(prompt, appId, userId, type, memoryProvider, null);
+    }
+
+    private Flux<WorkflowStreamEvent> executeWorkflowEvents(String prompt, Long appId, Long userId,
+            CodeGenTypeEnum type, ChatMemoryProvider memoryProvider, String taskId) {
         return Flux.create(sink -> {
             Thread worker = Thread.ofVirtual().name("workflow-" + appId).unstarted(() -> {
                 try {
                     sink.next(progress("workflow_start", "workflow", "工作流", "running", "开始执行工作流", 0));
-                    runWorkflow(initialContext(prompt, appId, userId, type), memoryProvider, sink::next, sink::isCancelled);
+                    WorkflowContext initial = initialContext(prompt, appId, userId, type);
+                    initial.setTaskId(taskId);
+                    runWorkflow(initial, memoryProvider, sink::next, sink::isCancelled);
                     if (!sink.isCancelled()) {
                         sink.next(progress("workflow_completed", "workflow", "工作流", "completed", "工作流已完成", 0));
                         sink.complete();

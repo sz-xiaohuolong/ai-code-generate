@@ -6,10 +6,11 @@
 | 职责 | 实际路径或外部位置 | 状态 | 定位依据/备注 |
 |---|---|---|---|
 | Agent 规则 | [AGENTS.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/AGENTS.md) | `已核验` | 统一行为入口，索引并保留 [CLAUDE.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/CLAUDE.md) 规则 |
-| 产品范围与定位 | [PRODUCT.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/PRODUCT.md) | `已更新` | 描述系统核心定位、用户、端到端闭环与硬性约束；当前有效需求见 `generation-modes/SPEC.md` |
+| 产品范围与定位 | [PRODUCT.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/PRODUCT.md) | `已更新` | 描述系统核心定位、用户、端到端闭环与硬性约束；当前有效需求见 `p0-reliability/SPEC.md` |
 | 当前系统架构 | [docs/architecture-summary.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/architecture-summary.md) | `已核验` | 后端分层、数据流、LangChain4j/LangGraph4j 及存储全景，辅以 [langgraph4j-codegen-workflow.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/langgraph4j-codegen-workflow.md) |
 | 当前执行进度 | [docs/vibe/PROGRESS.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/vibe/PROGRESS.md) | `已更新` | 追踪当前 State、未提交改动、Last Stable Commit 与下一 Gate |
-| 当前模式需求、设计与验证 | [docs/vibe/releases/generation-modes/](docs/vibe/releases/generation-modes/) | `当前有效` | SPEC、设计、计划、验证矩阵与迁移边界 |
+| 当前 P0 需求、设计与验证 | [docs/vibe/releases/p0-reliability/](docs/vibe/releases/p0-reliability/) | `已验证，待同步` | 一个 Phase：生成任务可靠性与 Vue 交付可靠性；验证范围与限制见该目录 VERIFICATION |
+| 已发布模式需求、设计与验证 | [docs/vibe/releases/generation-modes/](docs/vibe/releases/generation-modes/) | `历史基线` | 模式固定等行为由 P0 SPEC 延续，原验证保持封存 |
 | 历史技术设计 | [docs/superpowers/specs/](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/superpowers/specs/) | `历史封存` | 2026-08-16 精选缓存设计、平台安全稳定性设计，已落地 |
 | 历史实施计划 | [docs/superpowers/plans/](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/superpowers/plans/) | `历史封存` | 工作流、缓存与安全分阶段计划，已执行完毕 |
 | 决策记录 (ADR) | `docs/vibe/decisions/` | `未建立` | 历史技术决策分散于 specs，后续架构/破坏性决策在此单独建立 |

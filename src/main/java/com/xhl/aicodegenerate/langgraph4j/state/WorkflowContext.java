@@ -60,6 +60,9 @@ public class WorkflowContext implements Serializable {
     @Builder.Default
     private Long userId = 0L;
 
+    /** 本轮后台任务标识，文件工具和构建显式使用。 */
+    private String taskId;
+
     /**
      * 图片资源字符串
      */

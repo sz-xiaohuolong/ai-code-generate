@@ -53,6 +53,9 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/app")
 public class AppController {
+    @Resource private com.xhl.aicodegenerate.generation.GenerationTaskService generationTasks;
+    @Resource private com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
+
 
     private static final int USER_MAX_PAGE_SIZE = 20;
 
@@ -274,16 +277,10 @@ public class AppController {
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        // 调用服务生成代码（流式）
-        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
-        return contentFlux
-                .map(chunk -> {
-                    Map<String, String> wrapper = Map.of("d", chunk);
-                    String jsonData = JSONUtil.toJsonStr(wrapper);
-                    return ServerSentEvent.<String>builder()
-                            .data(jsonData)
-                            .build();
-                })
+        return Flux.defer(() -> {
+            var task = generationTasks.start(appId, message, request.getParameter("clientRequestId"), loginUser);
+            return GenerationTaskController.snapshots(generationTasks.events(task.getId(), loginUser));
+        })
                 .onErrorResume(error -> Mono.just(buildSseBusinessError(error)))
                 .concatWith(Mono.just(
                         // 发送结束事件
@@ -377,7 +374,7 @@ public class AppController {
         // 4. 构建应用代码目录路径（生成目录，非部署目录）
         String codeGenType = app.getCodeGenType();
         String sourceDirName = codeGenType + "_" + appId;
-        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        String sourceDirPath = generationWorkspace.published(appId, codeGenType).toString();
         // 5. 检查代码目录是否存在
         File sourceDir = new File(sourceDirPath);
         ThrowUtils.throwIf(!sourceDir.exists() || !sourceDir.isDirectory(),

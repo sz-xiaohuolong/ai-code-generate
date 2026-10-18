@@ -23,6 +23,7 @@ public class LocalWorkflowAssetService {
     private static final String ASSET_ROOT = "workflow_assets";
 
     public String saveSvg(Long appId, String fileNamePrefix, String svgContent) {
+        if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException("素材任务已停止");
         Long safeAppId = appId == null || appId <= 0 ? 0L : appId;
         String safePrefix = StrUtil.blankToDefault(fileNamePrefix, "asset")
                 .replaceAll("[^a-zA-Z0-9_-]", "_");

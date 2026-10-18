@@ -1,5 +1,3 @@
-import { CodeGenTypeEnum } from '@/constants/codeGenType'
-
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '')
 
 export const APP_PREVIEW_BASE_URL = trimTrailingSlash(
@@ -14,11 +12,7 @@ export const buildAppPreviewUrl = (codeGenType?: string, appId?: string | number
   if (!codeGenType || !appId) {
     return ''
   }
-  const baseUrl = `${APP_PREVIEW_BASE_URL}/${codeGenType}_${appId}/`
-  if (codeGenType === CodeGenTypeEnum.VUE_PROJECT) {
-    return `${baseUrl}dist/index.html`
-  }
-  return baseUrl
+  return `${APP_PREVIEW_BASE_URL}/${codeGenType}_${appId}/`
 }
 
 export const buildAppDeployUrl = (deployKey?: string) => {

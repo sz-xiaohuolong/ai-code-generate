@@ -148,6 +148,12 @@ class AppControllerCacheTest {
             return RestClient.builder();
         }
 
+        @Bean com.xhl.aicodegenerate.generation.GenerationTaskService generationTasks() {
+            return mock(com.xhl.aicodegenerate.generation.GenerationTaskService.class);
+        }
+        @Bean com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace() {
+            return mock(com.xhl.aicodegenerate.generation.GenerationWorkspace.class);
+        }
         @Bean
         AppController appController() {
             return new AppController();

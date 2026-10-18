@@ -54,14 +54,7 @@ public class FileDirReadTool extends BaseTool {
             String relativeDirPath,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        try {
-            Long appId = memoryId.getAppId();
-            Path path = Paths.get(relativeDirPath == null ? "" : relativeDirPath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeDirPath == null ? "" : relativeDirPath);
-            }
+        return FileToolSupport.execute(memoryId, relativeDirPath, path -> {
             File targetDir = path.toFile();
             if (!targetDir.exists() || !targetDir.isDirectory()) {
                 return "错误：目录不存在或不是目录 - " + relativeDirPath;
@@ -69,29 +62,16 @@ public class FileDirReadTool extends BaseTool {
             StringBuilder structure = new StringBuilder();
             structure.append("项目目录结构:\n");
             // 使用 Hutool 递归获取所有文件
-            List<File> allFiles = FileUtil.loopFiles(targetDir, file -> !shouldIgnore(file.getName()));
-            // 按路径深度和名称排序显示
-            allFiles.stream()
-                    .sorted((f1, f2) -> {
-                        int depth1 = getRelativeDepth(targetDir, f1);
-                        int depth2 = getRelativeDepth(targetDir, f2);
-                        if (depth1 != depth2) {
-                            return Integer.compare(depth1, depth2);
-                        }
-                        return f1.getPath().compareTo(f2.getPath());
-                    })
-                    .forEach(file -> {
-                        int depth = getRelativeDepth(targetDir, file);
-                        String indent = "  ".repeat(depth);
-                        structure.append(indent).append(file.getName());
-                    });
+            try (var paths = java.nio.file.Files.walk(path)) {
+                paths.filter(java.nio.file.Files::isRegularFile)
+                        .filter(p -> !java.nio.file.Files.isSymbolicLink(p))
+                        .filter(p -> java.util.stream.StreamSupport.stream(path.relativize(p).spliterator(), false)
+                                .noneMatch(part -> shouldIgnore(part.toString())))
+                        .limit(500).sorted().forEach(p -> structure.append(path.relativize(p)).append("\n"));
+            }
             return structure.toString();
 
-        } catch (Exception e) {
-            String errorMessage = "读取目录结构失败: " + relativeDirPath + ", 错误: " + e.getMessage();
-            log.error(errorMessage, e);
-            return errorMessage;
-        }
+        });
     }
 
     /**

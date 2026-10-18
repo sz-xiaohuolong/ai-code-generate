@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { message, Modal } from 'ant-design-vue'
@@ -71,17 +71,9 @@ import {
   type VisualSelectedElement,
 } from '@/utils/visualEditor'
 
-type ChatMessage = {
-  role: 'user' | 'ai'
-  content: string
-  id?: string | number
-  createTime?: string
-  stage?: 'analyzing' | 'coding' | 'done' | 'error'
-  errorMessage?: string
-  rawPrompt?: string
-  workflowSteps?: WorkflowStep[]
-  workflowCompleted?: boolean
-}
+import { applyTaskSnapshot, prepareTaskSubmission, isTaskActive, type GenerationTask, type TaskChatMessage } from '@/utils/generationTask'
+import { startGenerationTask, getGenerationTask, getCurrentGenerationTask, stopGenerationTask, generationEventsUrl, TaskApiError } from '@/api/generationTask'
+type ChatMessage = TaskChatMessage
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile'
 type ViewMode = 'preview' | 'code'
@@ -108,6 +100,10 @@ const editMode = ref(false)
 const selectedElement = ref<VisualSelectedElement | null>(null)
 let eventSource: EventSource | null = null
 let streamFinished = false
+const activeTask = ref<GenerationTask | null>(null)
+const connectionLost = ref(false)
+let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
 let visualEditorBridge: ReturnType<typeof createVisualEditorBridge> | null = null
 
 // 工作台分栏与视口状态
@@ -214,7 +210,7 @@ const exitEditMode = () => {
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
-  const failed = record.messageType === 'ai' && /^(工作流生成失败：|工作流已中断|AI 回复失败：)/.test(record.message || '')
+  const failed = record.messageType === 'ai' && /^(生成未完成：|工作流生成失败：|工作流已中断|AI 回复失败：)/.test(record.message || '')
   return {
     id: record.id,
     role: record.messageType === 'ai' ? 'ai' : 'user',
@@ -226,10 +222,12 @@ const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
 }
 
 const loadAppInfo = async () => {
+  const requestedAppId = appId.value
   if (!loginUserStore.isLogin) {
     await loginUserStore.fetchLoginUser()
   }
-  const res = await getAppVoById({ id: appId.value as unknown as number })
+  const res = await getAppVoById({ id: requestedAppId as unknown as number })
+  if (disposed || appId.value !== requestedAppId) return
   if (res.data.code === 0 && res.data.data) {
     appInfo.value = res.data.data
   } else {
@@ -241,14 +239,16 @@ const loadHistory = async (loadMore = false) => {
   if (!appId.value || historyLoading.value) {
     return false
   }
+  const requestedAppId = appId.value
   historyLoading.value = true
   try {
     const oldestMessage = messages.value[0]
     const res = await listAppChatHistoryVoByPage({
-      appId: appId.value as unknown as number,
+      appId: requestedAppId as unknown as number,
       pageSize: 10,
       lastCreateTime: loadMore ? oldestMessage?.createTime : undefined,
     })
+    if (disposed || appId.value !== requestedAppId) return false
     if (res.data.code === 0 && res.data.data) {
       const records = res.data.data.records || []
       const historyMessages = records.map(toChatMessage)
@@ -279,88 +279,50 @@ const closeStream = () => {
   }
 }
 
-const showPreviewAfterGenerated = async () => {
-  if (streamFinished) return
-  const current = messages.value[messages.value.length - 1]
-  if (current?.stage === 'error' || (isWorkflow.value && !current?.workflowCompleted)) {
-    streamFinished = true
-    generating.value = false
-    if (current) {
-      current.stage = 'error'
-      current.errorMessage ||= '工作流未确认完成，请重新生成'
-    }
+const receiveTask = (task: GenerationTask) => {
+  if (disposed || String(task.appId) !== appId.value) return
+  const previous = activeTask.value
+  if (previous?.id === task.id && previous.revision > task.revision) return
+  activeTask.value = task
+  applyTaskSnapshot(messages.value, task)
+  generating.value = isTaskActive(task.status)
+  previewVisible.value = task.previewAvailable
+  streamFinished = !generating.value
+  if (streamFinished) {
     closeStream()
-    return
-  }
-  streamFinished = true
-  generating.value = false
-  previewVisible.value = true
-  const lastMessage = messages.value[messages.value.length - 1]
-  if (lastMessage?.role === 'ai') {
-    lastMessage.stage = 'done'
-  }
-  closeStream()
-  await loadAppInfo()
-}
-
-const appendAiContent = (content: string) => {
-  const lastMessage = messages.value[messages.value.length - 1]
-  if (lastMessage?.role === 'ai') {
-    lastMessage.stage = 'coding'
-    lastMessage.content += content
-  } else {
-    messages.value.push({
-      role: 'ai',
-      content,
-      stage: 'coding',
-    })
+    if (task.status === 'SUCCEEDED' && (previous?.id !== task.id || previous.status !== 'SUCCEEDED')) {
+      iframeKey.value++
+      loadAppInfo()
+    }
   }
   scrollToBottom()
 }
 
-const handleStreamChunk = (chunk: string) => {
-  if (isWorkflow.value) {
-    try {
-      const event = JSON.parse(chunk)
-      const current = messages.value[messages.value.length - 1]
-      if (event.type === 'workflow_progress' && current?.role === 'ai') {
-        if (event.id === 'workflow') {
-          current.workflowCompleted = event.status === 'completed'
-        } else {
-          current.workflowSteps = updateWorkflowProgress(current.workflowSteps || [], event)
-          if (event.id === 'code_generator' && event.status === 'running') current.content = ''
-        }
-        if (event.status === 'failed') {
-          current.stage = 'error'
-          current.errorMessage = event.message
-        }
-        scrollToBottom()
-        return
-      }
-      if (event.type === 'ai_response') {
-        appendAiContent(event.data || '')
-        return
-      }
-    } catch {
-      // 保留旧服务返回原始文本时的兼容展示。
-    }
+const subscribeTask = (id: string) => {
+  closeStream()
+  connectionLost.value = false
+  eventSource = new EventSource(generationEventsUrl(id), { withCredentials: true })
+  eventSource.addEventListener('task-snapshot', (event: MessageEvent) => {
+    try { receiveTask(JSON.parse(event.data) as GenerationTask) }
+    catch { message.error('任务状态解析失败，请刷新恢复') }
+  })
+  eventSource.onopen = () => { connectionLost.value = false }
+  eventSource.onerror = () => {
+    if (streamFinished || disposed) return
+    connectionLost.value = true
+    if (recoveryTimer) clearTimeout(recoveryTimer)
+    recoveryTimer = setTimeout(async () => {
+      try { receiveTask(await getGenerationTask(id)) }
+      catch (error) { if (error instanceof TaskApiError) closeStream() }
+    }, 1000)
   }
-  appendAiContent(chunk)
 }
 
-const stopGeneration = () => {
-  if (!generating.value) return
-  closeStream()
-  streamFinished = true
-  generating.value = false
-  const lastMessage = messages.value[messages.value.length - 1]
-  if (lastMessage?.role === 'ai') {
-    lastMessage.stage = 'error'
-    lastMessage.errorMessage = '生成已手动中断，结果尚未确认可用'
-    lastMessage.workflowSteps = lastMessage.workflowSteps?.map((step) => step.status === 'running'
-      ? { ...step, status: 'failed', message: '已手动中断' } : step)
-  }
-  message.info('已终止本次生成')
+const stopGeneration = async () => {
+  if (!activeTask.value || !generating.value || activeTask.value.status === 'STOPPING') return
+  activeTask.value = { ...activeTask.value, status: 'STOPPING', stage: '正在停止', message: '正在等待后台资源清理' }
+  try { receiveTask(await stopGenerationTask(activeTask.value.id)) }
+  catch { message.warning('停止请求尚未确认，任务状态会继续更新') }
 }
 
 const handleRetry = (prompt?: string) => {
@@ -374,109 +336,44 @@ const handleFillPrompt = (prompt?: string) => {
   message.success('已回填提示词到输入框')
 }
 
-const sendMessage = (value?: string) => {
+const sendMessage = async (value?: string) => {
   const content = value?.trim() || ''
-  if (!content) {
-    message.warning('请输入消息')
-    return false
-  }
-  if (generating.value) {
-    message.warning('AI 正在生成中')
-    return false
-  }
-  previewVisible.value = false
-  messages.value.push({
-    role: 'user',
-    content,
-  })
-  messages.value.push({
-    role: 'ai',
-    content: '',
-    stage: 'analyzing',
-    rawPrompt: content,
-  })
-  scrollToBottom()
-
+  if (!content) { message.warning('请输入消息'); return false }
+  if (generating.value) { message.warning('当前应用正在生成，请等待完成或停止后重试'); return false }
+  const requestedAppId = appId.value
+  const pendingKey = `generation:pending:${requestedAppId}`
+  let pending: { prompt: string; id: string } | undefined
+  try { pending = JSON.parse(localStorage.getItem(pendingKey) || 'null') || undefined } catch { /* 损坏的本地暂存按新请求处理。 */ }
+  const requestId = pending?.prompt === content ? pending.id : crypto.randomUUID()
+  localStorage.setItem(pendingKey, JSON.stringify({ prompt: content, id: requestId }))
+  prepareTaskSubmission(messages.value, content, requestId)
   generating.value = true
   streamFinished = false
-  closeStream()
-  const url = new URL('http://localhost:8123/api/app/chat/gen/code')
-  url.searchParams.set('appId', String(appId.value))
-  url.searchParams.set('message', content)
-  eventSource = new EventSource(url.toString(), {
-    withCredentials: true,
-  })
-
-  eventSource.onmessage = (event) => {
-    if (streamFinished) return
-    if (event.data === '[DONE]') {
-      showPreviewAfterGenerated()
-      return
-    }
-    try {
-      const data = JSON.parse(event.data)
-      if (data.d === '[DONE]') {
-        showPreviewAfterGenerated()
-        return
-      }
-      handleStreamChunk(data.d || '')
-    } catch (error) {
-      handleStreamChunk(event.data || '')
-    }
-  }
-
-  eventSource.addEventListener('done', () => {
-    showPreviewAfterGenerated()
-  })
-
-  eventSource.addEventListener('business-error', (event: MessageEvent) => {
-    if (streamFinished) return
-    try {
-      const errorData = JSON.parse(event.data) as { message?: string }
-      const errorMessage = errorData.message || '生成过程中出现错误'
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (lastMessage?.role === 'ai') {
-        lastMessage.stage = 'error'
-        lastMessage.errorMessage = errorMessage
-      }
-      streamFinished = true
-      generating.value = false
-      message.error(errorMessage)
-      closeStream()
-    } catch (error) {
-      console.error('解析 SSE 业务错误失败:', error, event.data)
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (lastMessage?.role === 'ai') {
-        lastMessage.stage = 'error'
-        lastMessage.errorMessage = '服务器返回了无法解析的错误'
-      }
-      streamFinished = true
-      generating.value = false
-      message.error('服务器返回了无法解析的错误')
-      closeStream()
-    }
-  })
-
-  eventSource.onerror = () => {
-    if (streamFinished) return
-    const lastMessage = messages.value[messages.value.length - 1]
-    if (lastMessage?.role === 'ai') {
-      lastMessage.stage = 'error'
-      lastMessage.errorMessage = '生成连接中断，结果尚未确认完成，请重试'
-      lastMessage.workflowSteps = lastMessage.workflowSteps?.map((step) => step.status === 'running'
-        ? { ...step, status: 'failed', message: '生成连接中断' } : step)
-    }
+  scrollToBottom()
+  try {
+    const task = await startGenerationTask(requestedAppId, content, requestId)
+    if (disposed || appId.value !== requestedAppId) return false
+    localStorage.removeItem(pendingKey)
+    receiveTask(task)
+    if (isTaskActive(task.status)) subscribeTask(task.id)
+    return true
+  } catch (error) {
+    if (disposed || appId.value !== requestedAppId) return false
     generating.value = false
-    streamFinished = true
-    closeStream()
-    message.error('生成连接异常，请稍后重试')
+    const last = messages.value.find((item) => item.role === 'ai' && item.clientRequestId === requestId)
+    if (last) {
+      last.stage = 'error'
+      last.errorMessage = error instanceof Error ? error.message : '创建任务失败，请重试'
+    }
+    if (error instanceof TaskApiError) localStorage.removeItem(pendingKey)
+    message.error(error instanceof TaskApiError ? error.message : '请求结果尚未确认，重试会复用同一请求标识')
+    return false
   }
-  return true
 }
 
-const handleUserSendMessage = (value: string) => {
+const handleUserSendMessage = async (value: string) => {
   const prompt = buildPromptWithSelectedElement(value)
-  if (sendMessage(prompt)) {
+  if (await sendMessage(prompt)) {
     exitEditMode()
   }
 }
@@ -715,6 +612,39 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   }
 }
 
+let hydrationEpoch = 0
+const hydratePage = async () => {
+  const epoch = ++hydrationEpoch
+  const currentPage = () => !disposed && epoch === hydrationEpoch
+  closeStream()
+  if (recoveryTimer) clearTimeout(recoveryTimer)
+  activeTask.value = null
+  messages.value = []
+  generating.value = false
+  historyLoading.value = false
+  await loadAppInfo()
+  if (!currentPage()) return
+  const historyLoaded = await loadHistory()
+  if (!currentPage() || !isOwnApp.value) return
+  try {
+    const current = await getCurrentGenerationTask(appId.value)
+    if (!currentPage()) return
+    previewVisible.value = current.previewAvailable
+    if (current.task) {
+      receiveTask(current.task)
+      const pendingKey = `generation:pending:${appId.value}`
+      try {
+        const pending = JSON.parse(localStorage.getItem(pendingKey) || 'null')
+        if (pending?.id === current.task.clientRequestId) localStorage.removeItem(pendingKey)
+      } catch { localStorage.removeItem(pendingKey) }
+      if (isTaskActive(current.task.status)) subscribeTask(current.task.id)
+    } else if (historyLoaded && messages.value.length === 0 && appInfo.value.initPrompt) {
+      await sendMessage(appInfo.value.initPrompt)
+    }
+  } catch { message.warning('任务状态暂时无法恢复，请稍后刷新；后台任务会继续执行') }
+}
+watch(appId, () => { hydratePage() })
+
 onMounted(() => {
   visualEditorBridge = createVisualEditorBridge({
     getIframe: () => previewFrameRef.value,
@@ -726,17 +656,13 @@ onMounted(() => {
     },
   })
   window.addEventListener('keydown', handleGlobalKeydown)
-  const initPage = async () => {
-    await loadAppInfo()
-    const historyLoaded = await loadHistory()
-    if (historyLoaded && isOwnApp.value && messages.value.length === 0 && appInfo.value.initPrompt) {
-      sendMessage(appInfo.value.initPrompt)
-    }
-  }
-  initPage()
+  hydratePage()
+
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  if (recoveryTimer) clearTimeout(recoveryTimer)
   closeStream()
   visualEditorBridge?.dispose()
   window.removeEventListener('keydown', handleGlobalKeydown)
@@ -901,6 +827,14 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
+    <div v-if="generating" class="generation-task-status" role="status">
+      <SyncOutlined spin />
+      <strong>{{ activeTask?.stage || '正在创建任务' }}</strong>
+      <span>{{ connectionLost ? '连接恢复中，后台任务继续执行' : (activeTask?.message || '正在确认任务') }}</span>
+      <span v-if="previewVisible">右侧保留上次成功版本</span>
+      <button type="button" class="stop-stream-btn" :disabled="!activeTask || activeTask.status === 'STOPPING'" @click="stopGeneration">停止生成</button>
+    </div>
+
 
     <!-- 工作台双栏布局 -->
     <div
@@ -940,7 +874,7 @@ onBeforeUnmount(() => {
           >
             <div v-if="item.role === 'ai'" class="ai-avatar-icon">AI</div>
             <div class="message-bubble" :class="{ 'is-error': item.stage === 'error' }">
-              <div v-if="item.workflowSteps?.length" class="workflow-progress" aria-live="polite">
+              <div v-if="isWorkflow && item.workflowSteps?.length" class="workflow-progress" aria-live="polite">
                 <div class="workflow-progress-title">
                   <span>工作流进度</span>
                   <button v-if="generating && index === messages.length - 1" type="button" class="stop-gen-btn" @click="stopGeneration">终止</button>
@@ -959,10 +893,10 @@ onBeforeUnmount(() => {
               <!-- 业务异常恢复卡片 (Error Recovery Card) -->
               <div v-if="item.stage === 'error'" class="error-recovery-card">
                 <div class="error-card-header">
-                  <span class="error-badge">生成异常</span>
+                  <span class="error-badge">{{ item.taskStatus === 'CANCELLED' ? '已停止' : item.taskStatus === 'TIMED_OUT' ? '已超时' : item.taskStatus === 'INTERRUPTED' ? '服务中断' : '生成异常' }}</span>
                   <span class="error-title">{{ item.errorMessage || 'AI 生成未能顺利完成' }}</span>
                 </div>
-                <p class="error-card-desc">后端请求中断或出现业务校验拦截，您可直接重试或修改提示词。</p>
+                <p class="error-card-desc">您可直接重试或修改需求；本次任务不会覆盖此前的成功版本。</p>
                 <div class="error-card-actions">
                   <button
                     v-if="item.rawPrompt"
@@ -986,49 +920,11 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <!-- Tortuga 级流式时序时间线 (Pipeline Telemetry) -->
-              <div v-else-if="item.role === 'ai' && generating && !item.content && !isWorkflow" class="tortuga-pipeline">
-                <div class="pipeline-header">
-                  <div class="pipeline-title">
-                    <span class="live-dot-pulse" />
-                    <span class="pipeline-tag">PIPELINE EXECUTION</span>
-                    <span class="pipeline-hint">正在流式构建页面...</span>
-                  </div>
-                  <button type="button" class="stop-gen-btn" title="中断当前生成" @click="stopGeneration">
-                    <span>终止</span>
-                  </button>
-                </div>
-
-                <div class="pipeline-steps">
-                  <div class="step-item completed">
-                    <div class="step-indicator">
-                      <CheckOutlined />
-                    </div>
-                    <div class="step-body">
-                      <span class="step-name">解析自然语言需求</span>
-                      <span class="step-meta">已完成语义意图拆解与工程构架分析</span>
-                    </div>
-                  </div>
-
-                  <div class="step-item active">
-                    <div class="step-indicator">
-                      <SyncOutlined spin />
-                    </div>
-                    <div class="step-body">
-                      <span class="step-name">合成单页代码与样式</span>
-                      <span class="step-meta">实时编译 DOM 结构与响应式 CSS</span>
-                    </div>
-                  </div>
-
-                  <div class="step-item pending">
-                    <div class="step-indicator">
-                      <span class="pending-dot" />
-                    </div>
-                    <div class="step-body">
-                      <span class="step-name">沙盒容器热载与渲染</span>
-                      <span class="step-meta">等待代码流完成自动挂载</span>
-                    </div>
-                  </div>
+              <!-- 标准模式等待输出时只展示当前任务状态。 -->
+              <div v-else-if="item.role === 'ai' && generating && !item.content && !isWorkflow" class="stream-telemetry-bar">
+                <div class="telemetry-info">
+                  <SyncOutlined spin />
+                  <span>{{ activeTask?.stage || '正在创建任务' }}</span>
                 </div>
               </div>
 
@@ -1097,7 +993,7 @@ onBeforeUnmount(() => {
             <div v-if="previewVisible && previewUrl" class="device-frame">
               <iframe
                 ref="previewFrameRef"
-                :key="previewUrl + messages.length + iframeKey"
+                :key="previewUrl + iframeKey"
                 class="preview-frame"
                 :src="previewUrl"
                 title="生成后网站沙盒"
@@ -1226,6 +1122,7 @@ onBeforeUnmount(() => {
 .workflow-step.failed .workflow-step-status, .workflow-step.failed .workflow-step-mark { color: #c14c4c; }
 .generation-mode-badge { white-space: nowrap; }
 
+.generation-task-status { flex: none; margin: 6px 16px; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #edf4ff; color: #24539a; font-size: 12px; }
 .chat-page {
   display: flex;
   flex-direction: column;

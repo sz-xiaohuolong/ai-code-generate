@@ -108,7 +108,7 @@ public class AiCodeGeneratorServiceFactory {
         return switch (codeGenType) {
             case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
                     // Vue 工程生成需要工具调用和更强推理能力，所以使用单独配置的推理流式模型。
-                    .streamingChatModel(reasoningStreamingChatModel)
+                    .streamingChatModel(com.xhl.aicodegenerate.generation.UsageTrackingStreamingModel.wrap(reasoningStreamingChatModel, memoryId))
                     .chatMemoryProvider(currentChatMemoryProvider)
                     .inputGuardrails(new PromptSafetyInputGuardrail())
                     // 允许模型通过工具调用直接写入 Vue 工程文件，工具统一由 ToolManager 收集注册。
@@ -122,7 +122,7 @@ public class AiCodeGeneratorServiceFactory {
             case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
                     // HTML / 多文件模式仍使用默认模型，输出文本后由后续 parser/saver 解析和保存。
                     .chatModel(chatModel)
-                    .streamingChatModel(openAiStreamingChatModel)
+                    .streamingChatModel(com.xhl.aicodegenerate.generation.UsageTrackingStreamingModel.wrap(openAiStreamingChatModel, memoryId))
                     .chatMemoryProvider(currentChatMemoryProvider)
                     .inputGuardrails(new PromptSafetyInputGuardrail())
                     .build();

@@ -43,8 +43,12 @@ public class ImageCollectorNode {
             }
             List<ImageResource> collectedImages = new ArrayList<>();
             try {
-                ImageCollectionPlan plan = planImageCollection(context.getOriginalPrompt());
-                collectedImages = executeImageTasks(plan, context.getAppId());
+                var run = context.getTaskId() == null ? null : com.xhl.aicodegenerate.generation.GenerationExecution.require(context.getTaskId());
+                ImageCollectionPlan plan = run == null ? planImageCollection(context.getOriginalPrompt())
+                        : SpringContextUtil.getBean(com.xhl.aicodegenerate.generation.TaskChatServices.class)
+                            .create(ImageCollectionPlanService.class, context.getTaskId()).planImageCollection(context.getOriginalPrompt());
+                if (run != null) run.checkActive();
+                collectedImages = executeImageTasks(plan, context.getAppId(), run);
             } catch (Exception e) {
                 log.warn("图片素材收集失败，继续执行后续代码生成流程: {}", e.getMessage());
             }
@@ -69,6 +73,9 @@ public class ImageCollectorNode {
     }
 
     static List<ImageResource> executeImageTasks(ImageCollectionPlan plan, Long appId) {
+        return executeImageTasks(plan, appId, null);
+    }
+    static List<ImageResource> executeImageTasks(ImageCollectionPlan plan, Long appId, com.xhl.aicodegenerate.generation.GenerationExecution run) {
         ImageCollectionPlan normalizedPlan = plan == null
                 ? ImageCollectionPlan.defaultPlan("")
                 : plan.normalized("");
@@ -78,13 +85,13 @@ public class ImageCollectorNode {
         KrokiMermaidDiagramTool diagramTool = SpringContextUtil.getBean(KrokiMermaidDiagramTool.class);
 
         for (ImageCollectionPlan.ImageSearchTask task : normalizedPlan.getContentImageTasks()) {
-            futures.add(CompletableFuture.supplyAsync(() -> imageSearchTool.searchContentImages(task.query())));
+            futures.add(supply(run, () -> imageSearchTool.searchContentImages(task.query())));
         }
         for (ImageCollectionPlan.LogoTask task : normalizedPlan.getLogoTasks()) {
-            futures.add(CompletableFuture.supplyAsync(() -> logoTool.generateLogos(task.description(), appId)));
+            futures.add(supply(run, () -> logoTool.generateLogos(task.description(), appId)));
         }
         for (ImageCollectionPlan.DiagramTask task : normalizedPlan.getDiagramTasks()) {
-            futures.add(CompletableFuture.supplyAsync(() ->
+            futures.add(supply(run, () ->
                     diagramTool.generateMermaidDiagram(task.mermaidCode(), task.description(), appId)));
         }
 
@@ -104,6 +111,10 @@ public class ImageCollectorNode {
         return result;
     }
 
+    private static <T> CompletableFuture<T> supply(com.xhl.aicodegenerate.generation.GenerationExecution run,
+                                                   java.util.function.Supplier<T> action) {
+        return run == null ? CompletableFuture.supplyAsync(action) : run.fork(action);
+    }
     static String formatImageList(List<ImageResource> imageList) {
         if (imageList == null || imageList.isEmpty()) {
             return "";

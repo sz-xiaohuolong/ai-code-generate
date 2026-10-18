@@ -27,10 +27,15 @@ public abstract class CodeFileSaverTemplate<T> {
      * @return 保存的目录
      */
     public final File saveCode(T result,Long appId) {
+        return saveCode(result, appId, null);
+    }
+
+    public final File saveCode(T result, Long appId, java.nio.file.Path directory) {
         // 1. 验证输入
         validateInput(result);
         // 2. 构建唯一目录
-        String baseDirPath = buildUniqueDir(appId);
+        String baseDirPath = directory == null ? buildUniqueDir(appId) : directory.toString();
+        FileUtil.mkdir(baseDirPath);
         // 3. 保存文件（具体实现由子类提供）
         saveFiles(result, baseDirPath);
         // 4. 返回目录文件对象

@@ -60,16 +60,24 @@
         const appId = document.getElementById('appId').value.trim();
         if (!appId) { alert('请输入属于当前登录用户的工作流应用 ID'); return; }
         params.set('appId', appId);
+        const pendingKey = 'workflow-demo:pending:' + appId;
+        let pending;
+        try { pending = JSON.parse(localStorage.getItem(pendingKey) || 'null'); } catch (ignored) { }
+        const clientRequestId = pending && pending.prompt === prompt ? pending.id : crypto.randomUUID();
+        localStorage.setItem(pendingKey, JSON.stringify({ prompt, id: clientRequestId }));
+        params.set('clientRequestId', clientRequestId);
         source = new EventSource('/api/workflow/execute-flux?' + params.toString());
         source.onopen = () => setStatus('已连接，工作流执行中');
-        source.onerror = () => { setStatus('连接中断，请检查登录状态及应用权限'); closeStream(); };
-        ['workflow_start', 'step_started', 'step_completed', 'code_chunk', 'workflow_completed', 'workflow_error'].forEach(type => {
-            source.addEventListener(type, event => {
-                addEvent(type, event.data);
-                if (type === 'workflow_completed' || type === 'workflow_error') {
-                    closeStream();
-                }
-            });
+        source.onerror = () => { setStatus('连接中断，后台任务继续执行；再次连接会复用本次请求'); closeStream(); };
+        source.addEventListener('task-snapshot', event => {
+            const task = JSON.parse(event.data);
+            document.getElementById('events').innerHTML = '';
+            addEvent('任务进度', event.data);
+            setStatus(task.stage + '：' + task.message);
+            if (!['STARTING', 'RUNNING', 'STOPPING'].includes(task.status)) {
+                localStorage.removeItem(pendingKey);
+                closeStream();
+            }
         });
     }
 

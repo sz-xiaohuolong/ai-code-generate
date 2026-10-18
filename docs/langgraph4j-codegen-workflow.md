@@ -1,6 +1,6 @@
 # LangGraph4j 工作流特性实战开发说明
 
-本文档描述当前工作流模式的图编排、状态、记忆与流式协议。产品决策与验证分别以 `docs/vibe/releases/generation-modes/SPEC.md` 和 `VERIFICATION.md` 为准。
+本文档描述当前工作流模式的图编排、状态、记忆与流式协议。产品决策与验证分别以 `docs/vibe/releases/p0-reliability/SPEC.md` 和 `VERIFICATION.md` 为准。
 
 顶部选择只影响新建应用，`app.generationMode` 在创建后固定。两种模式共用应用工作台与聊天入口，代码类型 HTML／MULTI_FILE／VUE_PROJECT 与模式独立。
 
@@ -12,7 +12,7 @@
 2. 代码生成后新增代码质量检查节点，检查失败时回到代码生成节点重新生成。
 3. 图片收集节点改成“AI 规划 + CompletableFuture 并发执行 + 汇总结果”。
 4. 新增 Flux SSE 输出能力，并提供一个简单测试页面。
-5. 保持原来的代码生成门面、模型调用和保存路径规则，避免重写核心业务。
+5. 复用代码生成门面，任务通过显式 taskId 传递独立目录、预算和取消上下文。
 
 ## 2. 总体流程
 
@@ -46,6 +46,7 @@ flowchart TD
 
 | 字段 | 作用 |
 | --- | --- |
+| `taskId` | 定位本轮执行上下文、独立目录、预算与用量 |
 | `appId` / `userId` | 用于隔离代码生成目录、Chat Memory 和本地素材目录 |
 | `imageList` / `imageListStr` | 保存图片收集结果 |
 | `enhancedPrompt` | 保存追加素材后的提示词 |
@@ -76,7 +77,7 @@ case HTML, MULTI_FILE -> {
 
 因此：
 
-- `VUE_PROJECT`：进入 `ProjectBuilderNode`，调用 `VueProjectBuilder.buildProject(...)`。
+- `VUE_PROJECT`：进入 `ProjectBuilderNode`，调用共享 `VueDeliveryService.deliver(...)`，基于真实编译诊断最多修复两轮；无 taskId 的内部兼容调用保留旧构建器。
 - `HTML` / `MULTI_FILE`：直接结束工作流，`buildResultDir = generatedCodeDir`。
 
 这样减少无意义构建，也避免 HTML / 多文件项目被当成 Vue 项目执行 npm 命令。
@@ -213,35 +214,23 @@ tmp/code_output/workflow_assets/app_{appId}/
 
 ## 7. SSE 流式输出与鉴权
 
-正式入口为 `GET /api/app/chat/gen/code?appId=...&message=...`。应用服务从登录会话确认身份并校验归属，读取应用保存的模式。外层仍使用 `{d: chunk}`，正常结束发 `done`，异常发 `business-error`。
+正式工作台通过 `POST /api/app/generation/tasks` 创建任务，携带 `appId`、`message`、稳定 `clientRequestId`；通过 `GET /api/app/generation/tasks/{taskId}/events` 接收 `task-snapshot`。快照包含聚合正文、当前阶段、状态和真实步骤。启动、查询、停止、订阅仅限应用所有者。
 
-工作流 chunk 分为两类：
+兼容 `/app/chat/gen/code`、`/workflow/execute-flux` 与同步 `/workflow/execute` 也经过同一任务服务，并要求稳定 `clientRequestId`。前两者统一发送任务快照；演示页 `/api/workflow-sse.html` 已同步协议、请求暂存与重连行为。演示接口仍校验工作流应用并共用 `ai_chat` 限流键。
 
-```json
-{"type":"workflow_progress","id":"code_generator","name":"代码生成","status":"running","message":"正在代码生成","retryCount":0}
-{"type":"ai_response","data":"生成的文本或工具活动"}
-```
+页面连接只展示任务，关闭连接不取消。刷新查询 current 恢复已有输出并订阅后续快照，终态关闭订阅。用户停止后等待资源清理完成；服务重启丢失执行者时，租约失效后标记 INTERRUPTED，不自动重跑。
 
-节点执行前后均有真实进度，状态为 `running`、`completed`、`retrying`、`skipped`、`failed`。总体 `id=workflow` 完成才表示成功。重试启动时清空上一轮内容；断线、取消和失败均不展示成功预览。历史恢复要求末条 AI 消息包含服务端写入的明确完成标记。
+## 8. 正式历史与交付
 
-演示页面为 `/api/workflow-sse.html`。接口要求已登录，并提供属于本人的工作流应用 `appId` 和 `prompt`，不接受客户端指定执行身份；与正式入口共用 `ai_chat` 限流键。
+`generateForTask` 使用正式历史初始化本轮临时记忆；素材规划、工具活动、质检和修复均在任务预算内。结构化规划和质检通过可取消模型适配，统一记录供应商实际 usage。正式历史只保存一次原始输入与最终结果，Redis 终态提交同时保存待记内容；数据库事务以稳定主键幂等补记，短暂故障可恢复，不丢失或重复。
 
-| 演示接口 | 返回 |
-| --- | --- |
-| `GET /api/workflow/execute-flux?prompt=...&appId=...` | 命名事件 `workflow_start`、`step_started`、`step_completed`、`code_chunk`、`workflow_completed`、`workflow_error` |
-| `POST /api/workflow/execute?prompt=...&appId=...` | 完成后的路径、代码类型、质检重试次数及跳过原因摘要；失败抛出业务错误 |
+Vue 在 `ProjectBuilderNode` 调用共享交付：真实 npm 构建、分类诊断、最多两轮局部修复、浏览器资源与挂载检查。静态页面也检查入口和运行错误。通过后原子切换成功指针，异步封面截图读取固定成功版本。后续部署消费已通过检查的 dist，不在成功源码目录重建。失败和取消保留先前成功的代码、预览与下载来源。
 
-## 8. 正式历史与构建
-
-`generateForApp` 从应用正式历史初始化本轮临时记忆。素材增强、工具消息和质检重试仅进入临时记忆；正式历史只写一次原始用户输入和最终 AI 结果。失败和手动中断也记录明确结果，刷新后保持错误状态。
-
-工作流通过 `generateAndSaveCodeStreamForWorkflow` 复用生成门面，生成阶段只保存源码。Vue 质检后由 `ProjectBuilderNode` 构建一次，HTML／MULTI_FILE 显式跳过构建。截图在最终产物可用后触发。用户之后主动部署时再次构建 Vue，属于既有部署行为。
-
-取消会中断工作流等待线程，停止后续节点，并通过 TokenStream 的上下文 `StreamingHandle` 取消底层流；在工具执行前及最终构建前再次检查取消状态。已经开始的同步外部操作不能承诺瞬时撤销。
+模型与文件工具通过 taskId 定位执行上下文；停止会取消流，禁止后续文件操作并清理进程树。该工作目录约束不等价于完整容器沙箱，外部供应商是否继续计费不属于精确一次承诺。
 
 ## 9. 测试说明
 
-本次新增的轻量测试不依赖真实大模型：
+图路由的轻量测试不依赖真实大模型：
 
 ```bash
 ./mvnw -Dtest=CodeGenWorkflowRoutingTest,ImageCollectionPlanTest,CodeQualityCheckNodeTest,WorkflowSseTest test
@@ -275,3 +264,5 @@ tmp/code_output/workflow_assets/app_{appId}/
 5. `WorkflowSseController` 和 `workflow-sse.html`：是否能实时看到节点完成事件。
 
 整体上，这次改动没有替换原有 `AiCodeGeneratorFacade`、`CodeGenTypeEnum`、保存路径规则或 Vue 构建器，只是在 LangGraph4j 编排层增加了特性节点和边。
+
+P0 的真实 Redis、Node、Vue 编译器、Chrome、故障修复和任务恢复验收，以 [VERIFICATION.md](vibe/releases/p0-reliability/VERIFICATION.md) 为准。

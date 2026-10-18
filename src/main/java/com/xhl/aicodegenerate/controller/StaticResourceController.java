@@ -18,6 +18,7 @@ import java.io.File;
 @RestController
 @RequestMapping("/static")
 public class StaticResourceController {
+    @jakarta.annotation.Resource private com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
 
     // 应用生成根目录（用于浏览）
     private static final String PREVIEW_ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
@@ -44,14 +45,7 @@ public class StaticResourceController {
 
             // 封面图片路由支持：/static/cover/{fileName}
             if ("cover".equals(deployKey)) {
-                File file = new File(COVER_ROOT_DIR + resourcePath);
-                if (!file.exists()) {
-                    return ResponseEntity.notFound().build();
-                }
-                Resource resource = new FileSystemResource(file);
-                return ResponseEntity.ok()
-                        .header("Content-Type", getContentTypeWithCharset(file.getAbsolutePath()))
-                        .body(resource);
+                return fileResponse(java.nio.file.Path.of(COVER_ROOT_DIR), resourcePath);
             }
 
             // 如果是目录访问（不带斜杠），重定向到带斜杠的URL
@@ -64,31 +58,49 @@ public class StaticResourceController {
             if (resourcePath.equals("/")) {
                 resourcePath = "/index.html";
             }
-            // 构建文件路径：生成预览优先（若为 Vue 工程构建产物存在 dist 目录则优先从 dist 读取），其次兼容部署目录
-            File file = null;
-            File distFile = new File(PREVIEW_ROOT_DIR + "/" + deployKey + "/dist" + resourcePath);
-            if (distFile.exists()) {
-                file = distFile;
-            } else {
-                File previewFile = new File(PREVIEW_ROOT_DIR + "/" + deployKey + resourcePath);
-                if (previewFile.exists()) {
-                    file = previewFile;
-                } else {
-                    file = new File(DEPLOY_ROOT_DIR + "/" + deployKey + resourcePath);
+            java.nio.file.Path base;
+            var match = java.util.regex.Pattern.compile("(html|multi_file|vue_project)_(\\d+)").matcher(deployKey);
+            var fixed = java.util.regex.Pattern.compile("v_([A-Za-z0-9-]{1,80})_(html|multi_file|vue_project)_(\\d+)").matcher(deployKey);
+            if (match.matches()) {
+                base = generationWorkspace.published(Long.parseLong(match.group(2)), match.group(1));
+                if ("vue_project".equals(match.group(1)) && resourcePath.startsWith("/dist/")) {
+                    resourcePath = resourcePath.substring("/dist".length());
                 }
+                String version = generationWorkspace.publishedVersion(Long.parseLong(match.group(2)));
+                if (version != null) {
+                    // 页面及相对资源固定到同一个成功版本，后续发布不会混用资源。
+                    String key = "v_" + version + "_" + deployKey;
+                    String location = request.getContextPath() + "/static/" + key + resourcePath;
+                    return ResponseEntity.status(HttpStatus.TEMPORARY_REDIRECT).header("Location", location)
+                            .header("Cache-Control", "no-store").build();
+                }
+                if ("vue_project".equals(match.group(1))) base = base.resolve("dist");
+            } else if (fixed.matches()) {
+                base = generationWorkspace.version(Long.parseLong(fixed.group(3)), fixed.group(2), fixed.group(1));
+                if ("vue_project".equals(fixed.group(2))) {
+                    base = base.resolve("dist");
+                    if (resourcePath.startsWith("/dist/")) resourcePath = resourcePath.substring("/dist".length());
+                }
+            } else if ("workflow_assets".equals(deployKey)) {
+                base = java.nio.file.Path.of(PREVIEW_ROOT_DIR, deployKey);
+            } else {
+                if (!deployKey.matches("[A-Za-z0-9_-]+")) return ResponseEntity.notFound().build();
+                base = java.nio.file.Path.of(DEPLOY_ROOT_DIR, deployKey);
             }
-            // 检查文件是否存在
-            if (!file.exists()) {
-                return ResponseEntity.notFound().build();
-            }
-            // 返回文件资源
-            Resource resource = new FileSystemResource(file);
-            return ResponseEntity.ok()
-                    .header("Content-Type", getContentTypeWithCharset(file.getAbsolutePath()))
-                    .body(resource);
+            return fileResponse(base, resourcePath);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private ResponseEntity<Resource> fileResponse(java.nio.file.Path base, String path) throws java.io.IOException {
+        if (!path.startsWith("/")) return ResponseEntity.notFound().build();
+        java.nio.file.Path root = base.toAbsolutePath().normalize();
+        java.nio.file.Path target = root.resolve(path.substring(1)).normalize();
+        if (!target.startsWith(root) || !java.nio.file.Files.isRegularFile(target)
+                || !target.toRealPath().startsWith(root.toRealPath())) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok().header("Cache-Control", "no-cache")
+                .header("Content-Type", getContentTypeWithCharset(target.toString())).body(new FileSystemResource(target));
     }
 
     /**

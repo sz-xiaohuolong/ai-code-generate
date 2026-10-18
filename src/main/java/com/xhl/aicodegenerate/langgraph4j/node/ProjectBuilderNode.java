@@ -40,15 +40,20 @@ public class ProjectBuilderNode {
 
             String buildResultDir;
             try {
-                VueProjectBuilder vueBuilder = SpringContextUtil.getBean(VueProjectBuilder.class);
-                boolean buildSuccess = vueBuilder.buildProject(generatedCodeDir);
+                boolean buildSuccess;
+                if (context.getTaskId() != null) {
+                    var run = com.xhl.aicodegenerate.generation.GenerationExecution.require(context.getTaskId());
+                    SpringContextUtil.getBean(com.xhl.aicodegenerate.generation.VueDeliveryService.class)
+                            .deliver(run, new com.xhl.aicodegenerate.ai.AppChatMemoryId(context.getAppId(), context.getUserId(), context.getTaskId()), run::output, run::progress);
+                    buildSuccess = true;
+                } else buildSuccess = SpringContextUtil.getBean(VueProjectBuilder.class).buildProject(generatedCodeDir);
                 if (buildSuccess) {
                     buildResultDir = generatedCodeDir + File.separator + "dist";
                     log.info("Vue 项目构建成功，dist 目录: {}", buildResultDir);
                     try {
                         com.xhl.aicodegenerate.service.AppScreenshotService screenshotService =
                                 SpringContextUtil.getBean(com.xhl.aicodegenerate.service.AppScreenshotService.class);
-                        if (screenshotService != null && context.getAppId() != null && context.getAppId() > 0) {
+                        if (context.getTaskId() == null && screenshotService != null && context.getAppId() != null && context.getAppId() > 0) {
                             screenshotService.captureAppCoverAsync(context.getAppId(), buildResultDir);
                         }
                     } catch (Exception e) {

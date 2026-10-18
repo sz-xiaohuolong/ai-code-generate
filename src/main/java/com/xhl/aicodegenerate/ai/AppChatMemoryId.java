@@ -18,9 +18,17 @@ public class AppChatMemoryId implements Serializable {
 
     private final Long userId;
 
+    /** 仅用于本轮工具执行隔离，不改变应用级历史键。 */
+    private final String taskId;
+
     public AppChatMemoryId(Long appId, Long userId) {
+        this(appId, userId, null);
+    }
+
+    public AppChatMemoryId(Long appId, Long userId, String taskId) {
         this.appId = appId;
         this.userId = userId;
+        this.taskId = taskId;
     }
 
     @Override

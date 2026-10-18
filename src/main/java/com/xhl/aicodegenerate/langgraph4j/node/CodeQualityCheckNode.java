@@ -46,7 +46,10 @@ public class CodeQualityCheckNode {
                             .suggestions(List.of("请确认代码生成节点已成功保存文件"))
                             .build();
                 } else {
-                    CodeQualityCheckService qualityCheckService = SpringContextUtil.getBean(CodeQualityCheckService.class);
+                    CodeQualityCheckService qualityCheckService = context.getTaskId() == null
+                            ? SpringContextUtil.getBean(CodeQualityCheckService.class)
+                            : SpringContextUtil.getBean(com.xhl.aicodegenerate.generation.TaskChatServices.class)
+                                .create(CodeQualityCheckService.class, context.getTaskId());
                     qualityResult = qualityCheckService.checkCodeQuality(codeContent);
                     if (qualityResult == null || qualityResult.getIsValid() == null) {
                         context.setQualityCheckSkippedReason("质检模型返回不完整，已跳过检查");
