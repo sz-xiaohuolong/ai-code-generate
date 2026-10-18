@@ -15,6 +15,7 @@
 | 最新 SSE 历史主键 | 1 项通过，应用及历史 Snowflake ID 均以字符串传输 | `history-snapshot-green.log` |
 | 前端行为 | 9 项通过，覆盖快照恢复、停止状态、请求重试、历史去重和工作流状态 | `frontend-final-test.log` |
 | 前端生产构建 | 类型检查与 Vite 构建通过；保留既有大体积依赖分包提示 | `frontend-final-build.log` |
+| 精确提交树编译 | 在临时目录导出暂存树，`./mvnw -DskipTests test` 编译主代码及 49 个测试源文件通过；该命令不执行测试 | `staged-compile.log` |
 | 演示页 | 脚本语法检查通过；改用稳定请求 ID 和 task-snapshot | `src/main/resources/static/workflow-sse.html` |
 
 适用回归使用扫描 `src/test/java` 后的测试类清单调用 `./mvnw -Dtest=<清单> test`。前端命令为 `yarn test`、`yarn build`。最后两个后端补充检查复用此前未受影响的回归证据，不将数量重复累计。
@@ -57,3 +58,7 @@
 4. Redis 任务与幂等保留 24 小时；成功指针和版本目录需共同备份，历史待记内容直到成功补记才清除。暂不自动删除成功版本或加入版本管理界面。
 5. 未执行线上部署；部署来源已按实现和适用测试验证为成功版本，本轮不通过点击部署按钮扩大发布范围。
 6. 既有未提交的路由回退、推理配置、对应测试及原有文档差异保持原样，排除于本 Phase 提交；基线见 `preexisting.patch`。
+
+## 代码同步
+
+功能提交 `59310a9f3eadd7528e8af3a9ebf5a180f63e65cd` 已推送 `origin/main`，远程引用核对一致。既有 5 个跟踪文件差异的增删内容与执行前补丁完全一致，原有未跟踪 `RoutingFallbackTest.java` 继续保留；未将凭据或原始运行日志提交。进度与同步收尾文档随后单独提交，最终引用以仓库 HEAD 和远程 main 为准。
