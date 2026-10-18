@@ -60,4 +60,4 @@ npm run build
 
 未提交用户并行修改的 `ReasoningStreamingChatModelConfig.java`（模型名称变化），未覆盖该改动。本次真实验证运行环境包含该本地配置变化；HTML 使用的常规模型链路已通过，Vue 真实外部模型没有在本次验证中作成功声明。
 
-Git 同步结果以当前分支提交记录及远程一致性核对为准；交付后更新 `PROGRESS.md` 的交付状态。验证缺口不因提交或推送成功升级为 `VERIFIED`。
+功能提交 `c9179c4b4e337a22e9ee0955588b31ee58f23268` 已推送 `origin/main`，通过 `git rev-parse HEAD` 与 `git ls-remote --heads origin main` 核对一致；随后仅提交交付状态归档。验证缺口不因提交或推送成功升级为 `VERIFIED`。
