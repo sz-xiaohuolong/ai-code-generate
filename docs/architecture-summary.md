@@ -275,6 +275,7 @@ flowchart TB
 5. **记忆一致性**：ChatMemory 采用"DB 事实源 + Redis 缓存"，`AppChatMemoryId(appId, userId, taskId)` 显式传递本轮上下文；任务使用临时记忆，终态正式历史按稳定主键事务补记并刷新缓存；工具调用产生的运行时消息（ToolExecutionResult 等）不落业务历史表。
 6. **鉴权**：后端 `@AuthCheck(mustRole=ADMIN_ROLE)` + AOP 拦截；前端路由守卫双保险；App 归属校验（本人或管理员）在 Service/Controller 层。
 7. **可观测/文档**：Knife4j（`/api/doc.html`）；前端 API 客户端由 `yarn openapi2ts` 从 OpenAPI 规范自动生成。
+8. **工具上下文裁剪**：Vue 服务在 `AiCodeGeneratorServiceFactory` 通过 `chatRequestTransformer` 接入无状态的 `ToolContextPruner`，标准、工作流和修复共用。仅在请求副本中精简完整成功组的大段写入／修改参数、同文件较早的读取结果及已知旧写文件展示块；保留每文件最新读取、错误、推理字段、ID 配对、工具定义和请求参数。原始执行参数、文件、记忆与前端完整展示不变；短正文、未知格式和不安全工具组不裁剪。摘要不等于构建成功，也不替代既有轮数与时限保护；方案、测试接缝及验证边界见 [本次优化记录](vibe/tasks/2026-10-20-tool-context-pruning.md)。
 
 ## 9. 目录结构速览
 

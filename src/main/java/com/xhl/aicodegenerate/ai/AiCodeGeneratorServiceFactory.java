@@ -110,6 +110,8 @@ public class AiCodeGeneratorServiceFactory {
                     // Vue 工程生成需要工具调用和更强推理能力，所以使用单独配置的推理流式模型。
                     .streamingChatModel(com.xhl.aicodegenerate.generation.UsageTrackingStreamingModel.wrap(reasoningStreamingChatModel, memoryId))
                     .chatMemoryProvider(currentChatMemoryProvider)
+                    // 仅精简发给模型的历史副本，实际文件、工具执行和完整展示记忆保持不变。
+                    .chatRequestTransformer(new ToolContextPruner())
                     .inputGuardrails(new PromptSafetyInputGuardrail())
                     // 允许模型通过工具调用直接写入 Vue 工程文件，工具统一由 ToolManager 收集注册。
                     .tools((Object[]) toolManager.getAllTools())

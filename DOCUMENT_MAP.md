@@ -9,6 +9,7 @@
 | 产品范围与定位 | [PRODUCT.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/PRODUCT.md) | `已更新` | 描述系统核心定位、用户、端到端闭环与硬性约束；当前有效需求见 `p0-reliability/SPEC.md` |
 | 当前系统架构 | [docs/architecture-summary.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/architecture-summary.md) | `已核验` | 后端分层、数据流、LangChain4j/LangGraph4j 及存储全景，辅以 [langgraph4j-codegen-workflow.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/langgraph4j-codegen-workflow.md) |
 | 当前执行进度 | [docs/vibe/PROGRESS.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/vibe/PROGRESS.md) | `已更新` | 追踪当前 State、未提交改动、Last Stable Commit 与下一 Gate |
+| 工具上下文裁剪任务 | [docs/vibe/tasks/2026-10-20-tool-context-pruning.md](docs/vibe/tasks/2026-10-20-tool-context-pruning.md) | `已验证待同步` | 本次有界系统优化的方案、AC、实施顺序与验证记录，不改写 P0 历史基线 |
 | 当前 P0 需求、设计与验证 | [docs/vibe/releases/p0-reliability/](docs/vibe/releases/p0-reliability/) | `已验证并同步` | 一个 Phase：生成任务可靠性与 Vue 交付可靠性；验证范围与限制见该目录 VERIFICATION |
 | 已发布模式需求、设计与验证 | [docs/vibe/releases/generation-modes/](docs/vibe/releases/generation-modes/) | `历史基线` | 模式固定等行为由 P0 SPEC 延续，原验证保持封存 |
 | 历史技术设计 | [docs/superpowers/specs/](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/superpowers/specs/) | `历史封存` | 2026-08-16 精选缓存设计、平台安全稳定性设计，已落地 |
