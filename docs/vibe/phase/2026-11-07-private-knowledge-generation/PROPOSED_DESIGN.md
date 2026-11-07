@@ -51,7 +51,7 @@
 | 后端／前端 | 复用 Java 21、Spring Boot 3.5、MyBatis-Flex、Vue 3.5、TypeScript | 沿用项目分层、Session、BaseResponse 和现有页面组件 |
 | 模型调用 | 复用 LangChain4j 1.15.0 与现有 reasoningStreamingChatModel 配置作为检索规划模型 | pom 已核验；规划模型集中验证工具协议，HTML 默认生成模型无需因此获得文件工具 |
 | 向量存储 | 新增 langchain4j-chroma，使用当前 BOM 对齐的 1.15.0-beta25；Chroma 服务候选 1.1.0，显式 API V2 | 官方 1.15.0 的 V2 集成测试使用该服务版本；适配器默认 V1，不能依赖默认值；候选组合尚未本机联调 [S2] |
-| 向量化 | 本地 Ollama nomic-embed-text:latest，记录实际模型摘要和维度 | 前轮只读确认服务与模型存在、元数据 768 维／2048 上下文；不据此声称中文质量合格 |
+| 向量化 | 本地 Ollama bge-m3:latest，记录实际模型摘要和 1024 维 | 2026-11-08 用户批准替换并完成本机推理；5 条校准样本通过、12 条保留样本通过 11 条，默认关闭，见验收第 9 节 |
 | Embedding 接入 | 推荐使用现有 Spring RestClient 封装 /api/embed，显式 truncate=false；适配为项目内 Embedding 接口 | 1.15.0 的 OllamaEmbeddingModel 构造请求未传 truncate，无法直接兑现“不静默截断”；薄适配避免修改 SDK 或额外装 tokenizer [S3、S4] |
 | 业务存储 | 复用 MySQL，新增知识相关表；不新增消息队列、对象存储或搜索引擎 | 用户当前容量小，Markdown/TXT 可存原始字节及规范化文本；文档与引用均不进入公开静态目录 |
 
@@ -167,7 +167,7 @@ LangChain4j 官方资料支持低层工具调用和按 AI Service invocation 选
 2. 短事务登记 PROCESSING 版本和原文。复用应用内有界执行器处理，不新增 Kafka；每次 attempt 分配独立 buildId，处理状态及执行批次保存在 MySQL，重启通过过期租约将中断处理标为失败，供用户重试，不将半成品标为可用。
 3. 按 Markdown 标题、段落和代码段尽量保留边界；超长段继续切分，块 ID 由文档／版本／buildId／序号决定。初始实验建议目标 512 字符、重叠 64 字符；字符数不等于 Token 数，必须依赖 truncate=false 验证并继续切小超长块。具体参数与中文样本结果绑定，发布前固定 profile。
 4. 调用 Ollama /api/embed，显式指定模型、输入与 truncate=false。上下文超长时缩小块再处理，不截断原文；非长度错误明确失败。校验返回向量数量、维度、有限数值与非空输入一一对应。
-5. 文档／查询前缀按实际模型身份验证；Nomic 官方 v1.5 模型卡要求 search_document／search_query 前缀，但本机 latest 不能直接当作该版本 [S5]。将模型摘要、维度、分块规则及前缀策略共同写入 embeddingProfile，索引和查询必须一致。
+5. 文档／查询前缀按实际模型身份验证；当前 BGE-M3 文档和查询均不加前缀。显式配置旧 Nomic 时保留 search_document／search_query 前缀兼容，但不视为已通过中文质量验收。将模型摘要、维度、分块规则及前缀策略共同写入 embeddingProfile，索引和查询必须一致。
 6. 幂等 upsert 全部分块，核对预期 chunk 数与索引记录后，短事务校验版本仍为当前待处理、文档未删除、处理 attempt 未失效，再原子设置该版本的 publishedBuildId 并切换 activeVersionId。失败残留不会通过检索白名单，失败清理只针对失效 buildId，不能按整个 version 删除重试后的有效批次；不先删旧索引。旧 attempt 的迟到写入只会落入其独立批次，不能覆盖当前批次。删除墓碑驱动周期性可重复清理，覆盖删除操作之后才到达 Chroma 的写入。
 
 检索先读本人所有未删除文档的 activeVersionId 及对应 publishedBuildId 白名单，在本人 collection 中过滤这些已发布批次和 profile，再取候选；绝不能先跨用户取 top-k 再在 Java 过滤。返回后再次从 MySQL 核对文档、版本、publishedBuildId 与哈希。快照建立与删除／版本切换通过相同文档行锁序列化：先建立的快照可完成，先生效的删除不再进入新快照。远程检索期间不持锁；若版本发生变化，丢弃失效片段，必要时进行一次仅为一致性重读的索引查询，不重新让模型改 query。
@@ -322,4 +322,4 @@ PRD 的 AC-12 中“不进入代码生成模型调用”在本方案下指“不
 - 代码生成、代码质检及修复可取得固定片段；图片素材规划不注入片段，也不更新来源提交状态。用途选择不取消任务预算、计量、取消或生成门禁。
 - 分块优先使用换行边界，超长文本递归细分，空白子块不向量化，原文完整保留；尚未实现 Markdown 语法级标题／代码块解析，不声称语义分块已完整实现。
 - 为避免依赖并行开发的追踪模块，本次独立提交不新增知识专用追踪 span。长期参考记录由知识表保存，不依赖追踪；这不改变资料来源的保留约定。
-- 当前本机模型的中文正负例不可可靠区分，默认 `knowledge.enabled=false`。选择其他本地模型的对比等待用户决定，不能仅降低阈值或换云端服务越过质量验证。
+- 2026-11-08 经用户批准切换至本地 BGE-M3，候选阈值为 0.78。原校准集通过，但保留集仍有审批语义误匹配，因此默认 `knowledge.enabled=false`；模型切换完成不替代真实业务质量验收。

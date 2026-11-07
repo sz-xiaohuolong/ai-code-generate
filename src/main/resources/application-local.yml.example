@@ -41,11 +41,11 @@ pexels:
   api-key: YOUR_PEXELS_API_KEY
 
 # 先执行 sql/migrations/20261107_private_knowledge.sql，再配置隔离的 Chroma 与本地 Ollama。
-# 开启前须验证中文正负样本。当前 nomic-embed-text 的中文样本验收未通过，不能仅凭模型已下载启用。
+# 使用 Ollama 本地 BGE-M3；开启前须验证检索与真实生成，不能仅凭模型已下载启用。
 knowledge:
   enabled: false
   ollama-url: http://127.0.0.1:11434
-  embedding-model: nomic-embed-text:latest
+  embedding-model: bge-m3:latest
   chroma-url: http://127.0.0.1:8000
   max-file-bytes: 2097152
   max-total-bytes: 20971520
@@ -55,5 +55,5 @@ knowledge:
   candidates: 12
   max-fragments: 6
   max-context-chars: 6000
-  # 此值是初始配置，必须结合实际模型校准，不能视为已验证阈值。
-  min-score: 0.65
+  # BGE-M3 校准集候选值；保留集仍有误匹配，真实业务启用前须继续验收。
+  min-score: 0.78

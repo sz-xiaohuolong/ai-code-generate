@@ -1,0 +1,94 @@
+{
+  "documents": [
+    "星海商城订单列表接口为 GET /internal/orders，分页参数 pageIndex、pageSize。响应列表字段 orderNo、buyerName、totalAmount、status。取消订单使用 POST /internal/orders/{orderNo}/cancel，已发货订单禁止取消。",
+    "员工报销需提供发票，单笔超过五千元须部门经理审批，财务每周五统一付款。",
+    "晨露花店会员积分每消费十元积一分，会员生日赠送鲜花优惠券，不支持兑换现金。"
+  ],
+  "cases": [
+    {
+      "query": "根据星海商城接口文档生成订单管理页面，支持查询订单和取消未发货订单。",
+      "expected": 0,
+      "group": "calibration"
+    },
+    {
+      "query": "报销金额五千元以上怎么审批？",
+      "expected": 1,
+      "group": "calibration"
+    },
+    {
+      "query": "生成展示太阳系行星公转周期的科普页面。",
+      "expected": null,
+      "group": "calibration"
+    },
+    {
+      "query": "为宠物医院设计疫苗预约系统，支持猫狗疫苗预约。",
+      "expected": null,
+      "group": "calibration"
+    },
+    {
+      "query": "做个商城订单列表，显示买家和金额并提供取消按钮。",
+      "expected": 0,
+      "group": "calibration"
+    },
+    {
+      "query": "生成订单列表，分页请求要带哪些参数，应该展示哪些字段？",
+      "expected": 0,
+      "group": "holdout"
+    },
+    {
+      "query": "买家想取消尚未发货的订单，按钮要请求哪个接口？",
+      "expected": 0,
+      "group": "holdout"
+    },
+    {
+      "query": "员工申请报销六千元，需要谁审核？",
+      "expected": 1,
+      "group": "holdout"
+    },
+    {
+      "query": "报销资料应该附上什么凭证，财务在星期几打款？",
+      "expected": 1,
+      "group": "holdout"
+    },
+    {
+      "query": "晨露花店的会员消费二十元可以增加多少积分？",
+      "expected": 2,
+      "group": "holdout"
+    },
+    {
+      "query": "做一个花店会员权益说明，解释生日礼物和积分能否兑现金。",
+      "expected": 2,
+      "group": "holdout"
+    },
+    {
+      "query": "做一个番茄钟，支持专注二十五分钟后休息五分钟。",
+      "expected": null,
+      "group": "holdout"
+    },
+    {
+      "query": "展示东京与上海的天气预报，并绘制温度变化曲线。",
+      "expected": null,
+      "group": "holdout"
+    },
+    {
+      "query": "介绍计算机处理器的乱序执行机制。",
+      "expected": null,
+      "group": "holdout"
+    },
+    {
+      "query": "做一份发票真假识别模型训练教程，说明图像数据增强算法。",
+      "expected": null,
+      "group": "holdout"
+    },
+    {
+      "query": "展示企业员工的年假余额与请假审批流程。",
+      "expected": null,
+      "group": "holdout"
+    },
+    {
+      "query": "做银行贷款利息计算器，按本金利率计算每月还款。",
+      "expected": null,
+      "group": "holdout"
+    }
+  ]
+}

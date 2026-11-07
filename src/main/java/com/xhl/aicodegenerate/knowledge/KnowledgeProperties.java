@@ -15,14 +15,15 @@ public class KnowledgeProperties {
     private long maxTotalBytes = 20 * 1024 * 1024;
     private int maxDocuments = 50;
     private String ollamaUrl = "http://127.0.0.1:11434";
-    private String embeddingModel = "nomic-embed-text:latest";
+    private String embeddingModel = "bge-m3:latest";
     private String chromaUrl = "http://127.0.0.1:8000";
     private int chunkSize = 512;
     private int chunkOverlap = 64;
     private int candidates = 12;
     private int maxFragments = 6;
     private int maxContextChars = 6000;
-    private double minScore = 0.65;
+    // BGE-M3 校准集候选值；困难负例尚未全部通过，不代表可以默认启用。
+    private double minScore = 0.78;
     private int timeoutSeconds = 60;
     private int workers = 2;
 

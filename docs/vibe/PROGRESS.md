@@ -2,11 +2,13 @@
 
 ## 个人知识库辅助代码生成（2026-11-07）
 
-用户已批准 PRD／方案并授权 MVP 开发、人工验收说明和远程同步。需求 FROZEN、方案 APPROVED；实现及受控检查完成，质量验收 PARTIAL，默认 `knowledge.enabled=false`。中文模型正负样本不能可靠区分，已向用户询问是否对比其他本地模型，尚待决定；真实供应商生成效果未验收。
+用户已批准 PRD／方案并授权 MVP 开发、人工验收说明和远程同步。需求 FROZEN、方案 APPROVED；实现及受控检查完成，质量验收 PARTIAL，默认 `knowledge.enabled=false`。2026-11-08 用户批准使用 Ollama BGE-M3，已安装并切换默认与本地配置；原 5 条校准样本全过，新增保留集 11/12，年假审批仍误匹配报销资料。模型切换验证完成，质量门槛仍未全过；真实供应商生成效果未验收。
 
 独立交付树基于 `6fcf5d2`，保留主工作区并行任务。后端 18 类 65 项、前端 11 项、类型检查／构建及新增知识文件 lint 通过；六组合实际工厂／图／工具／修复接入使用受控模型验证。代码独立复审同意默认关闭同步，界面评审 ship；容器超限、来源补写与图片规划资料边界均已回归。原有 AppChatPage 的 7 项 lint 和服务关闭历史补记竞态已单独记录。
 
 [实施计划](phase/2026-11-07-private-knowledge-generation/IMPLEMENTATION_PLAN.md)、[验收及证据边界](phase/2026-11-07-private-knowledge-generation/VERIFICATION.md)、[业务流程与人工验收](phase/2026-11-07-private-knowledge-generation/USER_GUIDE.md)。T1～T4 实现完成，功能代码 `2e3dc3f` 已正常推送 origin/main 并核对远端哈希；T5 代码同步完成，模型质量与业务验收未完成，不宣称整个需求 VERIFIED。
+
+BGE 切换追加验证：15 类 53 项后端测试通过，含真实 Ollama／Chroma／MySQL、旧模型空间拒绝查询及混合发布；中文质量脚本如实返回退出码 1。资源、候选阈值 0.78、复现命令与未完成项见验收第 9 节；本次未部署、未迁移业务库。
 
 ## 当前阶段：2026-11-07-generation-observability-evaluation（生成追踪与独立质量评测）
 
