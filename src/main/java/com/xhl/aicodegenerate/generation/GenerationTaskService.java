@@ -44,6 +44,10 @@ public class GenerationTaskService implements AutoCloseable {
     }
 
     public GenerationTask start(Long appId, String message, String clientRequestId, User user) {
+        return start(appId, message, clientRequestId, user, false);
+    }
+
+    public GenerationTask start(Long appId, String message, String clientRequestId, User user, boolean useKnowledge) {
         App app = ownedApp(appId, user);
         if (message == null || message.isBlank() || message.length() > 20_000)
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请输入不超过 20000 字符的生成需求");
@@ -53,8 +57,11 @@ public class GenerationTaskService implements AutoCloseable {
         GenerationTask task = new GenerationTask();
         task.setId(UUID.randomUUID().toString()); task.setAppId(appId); task.setUserId(user.getId());
         task.setPrompt(message.trim()); task.setClientRequestId(clientRequestId.toLowerCase(Locale.ROOT));
+        task.setUseKnowledge(useKnowledge);
         task.setCodeGenType(app.getCodeGenType()); task.setGenerationMode(GenerationModeEnum.resolve(app.getGenerationMode()).getValue());
-        task.setInputHash(DigestUtil.sha256Hex(appId + "\n" + task.getGenerationMode() + "\n" + task.getCodeGenType() + "\n" + task.getPrompt()));
+        // false 沿用历史摘要，旧请求缺字段时仍可幂等恢复；true 必须产生不同摘要。
+        String originalHash = DigestUtil.sha256Hex(appId + "\n" + task.getGenerationMode() + "\n" + task.getCodeGenType() + "\n" + task.getPrompt());
+        task.setInputHash(useKnowledge ? "knowledge:" + originalHash : originalHash);
         task.setCreatedAt(System.currentTimeMillis()); task.setUpdatedAt(task.getCreatedAt()); task.setDeadlineAt(task.getCreatedAt() + budget.toMillis());
         task.setPreviewAvailable(workspace.hasPreview(appId, app.getCodeGenType()));
         String claimed = store.claim(task);
@@ -65,7 +72,8 @@ public class GenerationTaskService implements AutoCloseable {
             return existing;
         }
         GenerationExecution execution = new GenerationExecution(task.getId(), workspace.taskRoot(appId, task.getId()), budget,
-                () -> store.owns(appId, task.getId()) && !store.stopRequested(task.getId()));
+                () -> store.owns(appId, task.getId()) && !store.stopRequested(task.getId()), app.getInitPrompt());
+        if (useKnowledge) execution.requireKnowledge();
         Running active = new Running(task, execution);
         execution.observe(value -> append(active, value), event -> progress(active, event));
         Thread worker = Thread.ofVirtual().name("generation-task-" + task.getId()).unstarted(() -> execute(active));
@@ -132,7 +140,7 @@ public class GenerationTaskService implements AutoCloseable {
             active.execution.checkActive();
             synchronized (task) { task.setStatus(TaskStatus.RUNNING); task.setStage("代码生成"); task.setMessage("正在生成代码"); changed(active); }
             runner.run(task, active.execution, value -> append(active, value), progress -> progress(active, progress));
-            active.execution.checkActive();
+            active.execution.assertGenerationAllowed();
         } catch (Throwable error) {
             // 模型包装异常可能保留中断标记；先清除，才能读取已持久化的停止意图。
             Thread.interrupted();

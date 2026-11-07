@@ -7,6 +7,12 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/knowledge',
+      name: 'knowledge',
+      component: () => import('../pages/knowledge/KnowledgePage.vue'),
+      meta: { access: 'login' },
+    },
+    {
       path: '/',
       name: 'home',
       component: HomePage,

@@ -18,6 +18,8 @@ public final class GenerationExecution implements AutoCloseable {
     private final Path root;
     private final long deadline;
     private final BooleanSupplier owner;
+    private final String initialPrompt;
+    private GenerationRequirements requirements;
     private final AtomicBoolean cancelled = new AtomicBoolean();
     private final ReentrantReadWriteLock fileLock = new ReentrantReadWriteLock();
     private final Set<Runnable> cancellations = ConcurrentHashMap.newKeySet();
@@ -29,6 +31,27 @@ public final class GenerationExecution implements AutoCloseable {
     private int usageCalls;
     private Long inputTokens;
     private Long outputTokens;
+    private boolean knowledgeRequired;
+    private com.xhl.aicodegenerate.knowledge.KnowledgeContext knowledge;
+
+    public synchronized void requireKnowledge() {
+        if (knowledge != null) throw new IllegalStateException("知识上下文已固定");
+        knowledgeRequired = true;
+    }
+
+    public synchronized void attachKnowledge(com.xhl.aicodegenerate.knowledge.KnowledgeContext context) {
+        checkActive();
+        if (!knowledgeRequired || knowledge != null) throw new IllegalStateException("知识上下文不可覆盖或越权启用");
+        knowledge = java.util.Objects.requireNonNull(context);
+    }
+
+    public synchronized com.xhl.aicodegenerate.knowledge.KnowledgeContext knowledge() { return knowledge; }
+
+    public synchronized void assertGenerationAllowed() {
+        checkActive();
+        if (knowledgeRequired && knowledge == null) throw new com.xhl.aicodegenerate.knowledge.KnowledgeException(
+                "KNOWLEDGE_REQUIRED", "本轮尚未完成有效检索，禁止生成或写入产物");
+    }
 
     public void observe(Consumer<String> output, Consumer<Map<String, Object>> progress) { this.output = output; this.progress = progress; }
     public void output(String value) { checkActive(); output.accept(value); }
@@ -40,17 +63,60 @@ public final class GenerationExecution implements AutoCloseable {
         if (usage.inputTokenCount() != null) inputTokens = (inputTokens == null ? 0L : inputTokens) + usage.inputTokenCount();
         if (usage.outputTokenCount() != null) outputTokens = (outputTokens == null ? 0L : outputTokens) + usage.outputTokenCount();
     }
+    public ModelUsage newModelUsage() { return new ModelUsage(); }
+
+    /** 一次调用的分项用量只累加一次；迟到响应仅补充此前未知的分项。 */
+    public final class ModelUsage {
+        private boolean reported;
+        private boolean inputKnown;
+        private boolean outputKnown;
+        public void record(TokenUsage usage) {
+            if (usage == null) return;
+            synchronized (GenerationExecution.this) {
+                if (!inputKnown && usage.inputTokenCount() != null && usage.inputTokenCount() >= 0) {
+                    inputTokens = (inputTokens == null ? 0L : inputTokens) + usage.inputTokenCount();
+                    inputKnown = true;
+                }
+                if (!outputKnown && usage.outputTokenCount() != null && usage.outputTokenCount() >= 0) {
+                    outputTokens = (outputTokens == null ? 0L : outputTokens) + usage.outputTokenCount();
+                    outputKnown = true;
+                }
+                if (!reported && (inputKnown || outputKnown)) {
+                    usageCalls++;
+                    reported = true;
+                }
+            }
+        }
+    }
     public synchronized void copyUsage(GenerationTask task) {
         task.setModelCalls(modelCalls); task.setUsageReportedCalls(usageCalls);
         task.setInputTokens(inputTokens); task.setOutputTokens(outputTokens);
     }
 
     public GenerationExecution(String id, Path root, Duration budget, BooleanSupplier owner) {
+        this(id, root, budget, owner, null);
+    }
+
+    public GenerationExecution(String id, Path root, Duration budget, BooleanSupplier owner, String initialPrompt) {
         this.id = id;
         this.root = root.toAbsolutePath().normalize();
         this.deadline = System.nanoTime() + budget.toNanos();
         this.owner = owner;
+        this.initialPrompt = initialPrompt;
         if (ACTIVE.putIfAbsent(id, this) != null) throw new IllegalStateException("任务已在执行");
+    }
+
+    /** 在模型写入临时记忆前捕获一次，避免窗口淘汰及错误输出改变修复目标。 */
+    public synchronized void captureRequirements(java.util.List<dev.langchain4j.data.message.ChatMessage> history, String currentPrompt) {
+        checkActive();
+        if (requirements != null) throw new IllegalStateException("任务需求已固定");
+        requirements = GenerationRequirements.capture(initialPrompt, history, currentPrompt);
+    }
+
+    public synchronized GenerationRequirements requirements() {
+        if (requirements == null) throw new com.xhl.aicodegenerate.exception.BusinessException(
+                com.xhl.aicodegenerate.exception.ErrorCode.OPERATION_ERROR, "任务需求上下文缺失，已停止自动修复");
+        return requirements;
     }
 
     public static GenerationExecution require(String id) {
@@ -79,7 +145,7 @@ public final class GenerationExecution implements AutoCloseable {
 
     public <T> T files(Callable<T> operation) throws Exception {
         fileLock.readLock().lockInterruptibly();
-        try { checkActive(); return operation.call(); }
+        try { assertGenerationAllowed(); return operation.call(); }
         finally { fileLock.readLock().unlock(); }
     }
 

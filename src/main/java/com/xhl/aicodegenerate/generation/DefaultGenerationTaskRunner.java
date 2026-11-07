@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 @Service
 public class DefaultGenerationTaskRunner implements GenerationTaskRunner {
     @jakarta.annotation.Resource private com.xhl.aicodegenerate.service.AppScreenshotService screenshots;
+    @jakarta.annotation.Resource private com.xhl.aicodegenerate.knowledge.KnowledgePreparation knowledgePreparation;
     @org.springframework.beans.factory.annotation.Value("${server.port:8123}") private int serverPort = 8123;
     @org.springframework.beans.factory.annotation.Value("${server.servlet.context-path:/api}") private String contextPath = "/api";
     private final ChatMemoryProvider memories;
@@ -35,11 +36,19 @@ public class DefaultGenerationTaskRunner implements GenerationTaskRunner {
     @Override public void run(GenerationTask task, GenerationExecution run, Consumer<String> output, Consumer<Map<String, Object>> progress) {
         AppChatMemoryId id = new AppChatMemoryId(task.getAppId(), task.getUserId(), task.getId());
         var formal = memories.get(new AppChatMemoryId(task.getAppId(), task.getUserId()));
+        run.captureRequirements(formal.messages(), task.getPrompt());
         var scratch = MessageWindowChatMemory.withMaxMessages(20);
         scratch.add(formal.messages());
         CodeGenTypeEnum type = CodeGenTypeEnum.getEnumByValue(task.getCodeGenType());
         try {
             if (type == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用代码类型无效，请重新创建应用");
+            if (Boolean.TRUE.equals(task.getUseKnowledge())) {
+                progress.accept(VueDeliveryService.event("knowledge_search", "检索个人资料", "running", "正在查找本轮需要的参考资料", 0));
+                run.attachKnowledge(knowledgePreparation.prepare(task.getId(), task.getUserId(), task.getAppId(),
+                        task.getUserMessageId(), task.getAiMessageId(), run));
+                progress.accept(VueDeliveryService.event("knowledge_search", "检索个人资料", "completed", "参考资料已固定，开始生成", 0));
+            }
+            run.assertGenerationAllowed();
             boolean isWorkflow = "workflow".equals(task.getGenerationMode());
             var stream = isWorkflow ? workflow.generateForTask(task.getPrompt(), id, type, scratch)
                     : facade.generateAndSaveCodeStreamForWorkflow(task.getPrompt(), type, id, ignored -> scratch);

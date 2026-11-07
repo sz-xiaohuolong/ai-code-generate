@@ -7,6 +7,7 @@ export type TaskStep = {
   retryCount: number
 }
 export type GenerationTask = {
+  useKnowledge?: boolean
   id: string
   appId: number | string
   clientRequestId: string

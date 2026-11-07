@@ -39,8 +39,9 @@ public class ReasoningStreamingChatModelConfig {
                 // DeepSeek / Qwen 等 OpenAI-compatible 流式工具调用通常会完整返回 tool_call id。
                 // 关闭增量累积，避免把 id 片段重复拼接成非法 tool_call_id。
                 .accumulateToolCallId(false)
-                .logRequests(true)
-                .logResponses(true)
+                // 生成请求可能包含用户私有资料，供应商原始请求和响应不得进入普通日志。
+                .logRequests(false)
+                .logResponses(false)
                 .build();
     }
 }

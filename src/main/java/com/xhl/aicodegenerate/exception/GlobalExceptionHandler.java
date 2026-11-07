@@ -39,6 +39,11 @@ public class GlobalExceptionHandler {
         return ResultUtils.error(ErrorCode.PARAMS_ERROR.getCode(), e.getMessage());
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public BaseResponse<?> uploadSizeExceededHandler(org.springframework.web.multipart.MaxUploadSizeExceededException error) {
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "上传文件或请求超过容量限制，请缩小文件后重试");
+    }
+
     @ExceptionHandler(RuntimeException.class) // 兜底：没被上面接住的运行时异常
     public BaseResponse<?> runtimeExceptionHandler(RuntimeException e) {
         log.error("RuntimeException", e);

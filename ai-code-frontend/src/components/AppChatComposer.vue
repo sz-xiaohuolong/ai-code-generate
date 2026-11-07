@@ -3,17 +3,20 @@ import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { ArrowUpOutlined, CloseOutlined, EditOutlined, AimOutlined } from '@ant-design/icons-vue'
 import type { VisualSelectedElement } from '@/utils/visualEditor'
+import KnowledgeToggle from '@/components/KnowledgeToggle.vue'
 
 const props = defineProps<{
   generating?: boolean
   editMode?: boolean
   selectedElement?: VisualSelectedElement | null
+  useKnowledge?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [value: string]
   toggleEditMode: []
   clearSelectedElement: []
+  'update:useKnowledge': [value: boolean]
 }>()
 
 const inputMessage = ref('')
@@ -97,6 +100,7 @@ const submit = () => {
         :maxlength="1000"
         @press-enter.ctrl="submit"
       />
+      <KnowledgeToggle :model-value="!!useKnowledge" :disabled="generating" @update:model-value="emit('update:useKnowledge', $event)" />
       <div class="composer-actions">
         <div class="actions-left">
           <a-button

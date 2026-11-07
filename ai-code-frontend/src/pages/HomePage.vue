@@ -4,6 +4,8 @@ import { ArrowUpOutlined } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppCard from '@/components/AppCard.vue'
+import KnowledgeToggle from '@/components/KnowledgeToggle.vue'
+import { rememberFirstKnowledgeRequest } from '@/utils/knowledgeRequest'
 import { addApp, listFeaturedAppVoByPage, listMyAppVoByPage } from '@/api/appController'
 import { useGenerationModeStore } from '@/stores/generationMode'
 import { GENERATION_MODE_LABELS } from '@/utils/workflowProgress'
@@ -13,6 +15,7 @@ const generationModeStore = useGenerationModeStore()
 const router = useRouter()
 const prompt = ref('')
 const creating = ref(false)
+const useKnowledge = ref(false)
 const myApps = ref<API.AppVO[]>([])
 const featuredApps = ref<API.AppVO[]>([])
 const myLoading = ref(false)
@@ -93,9 +96,11 @@ const createApp = async () => {
     return
   }
   creating.value = true
+  const selectedKnowledge = useKnowledge.value
   try {
     const res = await addApp({ initPrompt, generationMode: generationModeStore.defaultMode })
     if (res.data.code === 0 && res.data.data) {
+      rememberFirstKnowledgeRequest(String(res.data.data), selectedKnowledge)
       await router.push(`/app/chat/${res.data.data}`)
     } else {
       message.error(res.data.message || '创建应用失败')
@@ -151,6 +156,7 @@ onMounted(() => {
               show-count
               @press-enter.ctrl="createApp"
             />
+            <KnowledgeToggle v-model="useKnowledge" :disabled="creating" />
             <div class="prompt-actions">
               <div class="prompt-tips">
                 <span class="kbd-hint">Ctrl + Enter</span>

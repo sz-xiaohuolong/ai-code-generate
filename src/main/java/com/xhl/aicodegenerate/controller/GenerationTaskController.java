@@ -20,12 +20,14 @@ public class GenerationTaskController {
     private final GenerationTaskService tasks;
     private final UserService users;
     public GenerationTaskController(GenerationTaskService tasks, UserService users) { this.tasks = tasks; this.users = users; }
-    public record StartRequest(Long appId, String message, String clientRequestId) { }
+    public record StartRequest(Long appId, String message, String clientRequestId, Boolean useKnowledge) {
+        public StartRequest(Long appId, String message, String clientRequestId) { this(appId, message, clientRequestId, false); }
+    }
     public record Current(GenerationTask task, boolean previewAvailable) { }
     @PostMapping
     @RateLimit(key = "ai_chat", limitType = RateLimitType.USER, rate = 5, rateInterval = 60)
     public BaseResponse<GenerationTask> start(@RequestBody StartRequest input, HttpServletRequest request) {
-        return ResultUtils.success(tasks.start(input.appId(), input.message(), input.clientRequestId(), users.getLoginUser(request)));
+        return ResultUtils.success(tasks.start(input.appId(), input.message(), input.clientRequestId(), users.getLoginUser(request), Boolean.TRUE.equals(input.useKnowledge())));
     }
     @GetMapping("/current") public BaseResponse<Current> current(@RequestParam Long appId, HttpServletRequest request) {
         var user = users.getLoginUser(request);

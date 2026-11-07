@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 public class TaskChatServices {
     @Resource(name = "openAiStreamingChatModel") private StreamingChatModel model;
     public <T> T create(Class<T> service, String taskId) {
-        return AiServices.builder(service).chatModel(new TaskChatModel(model, GenerationExecution.require(taskId))).build();
+        // 私有资料只供代码质检使用，不进入会向素材服务发送查询的图片规划。
+        boolean includeKnowledge = service == com.xhl.aicodegenerate.langgraph4j.ai.CodeQualityCheckService.class;
+        return AiServices.builder(service).chatModel(new TaskChatModel(model, GenerationExecution.require(taskId), includeKnowledge)).build();
     }
 }

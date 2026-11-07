@@ -57,6 +57,8 @@ import { buildAppPreviewUrl } from '@/config/env'
 import { getUserAvatar } from '@/constants/user'
 import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 import AppChatComposer from '@/components/AppChatComposer.vue'
+import KnowledgeReferences from '@/components/KnowledgeReferences.vue'
+import { nextKnowledgeRequest, readKnowledgeRequest, takeFirstKnowledgeRequest, type KnowledgeRequest } from '@/utils/knowledgeRequest'
 import {
   GENERATION_MODE_LABELS,
   normalizeGenerationMode,
@@ -83,6 +85,7 @@ const router = useRouter()
 const loginUserStore = useLoginUserStore()
 const { loginUser } = storeToRefs(loginUserStore)
 const appId = computed(() => String(route.params.id))
+const useKnowledge = ref(false)
 const appInfo = ref<API.AppVO>({})
 const isWorkflow = computed(() => appInfo.value.generationMode === 'workflow')
 const generationModeLabel = computed(() => GENERATION_MODE_LABELS[normalizeGenerationMode(appInfo.value.generationMode)])
@@ -327,7 +330,8 @@ const stopGeneration = async () => {
 
 const handleRetry = (prompt?: string) => {
   if (!prompt || generating.value) return
-  sendMessage(prompt)
+  const pending = readKnowledgeRequest(localStorage.getItem(`generation:pending:${appId.value}`))
+  sendMessage(prompt, pending?.prompt === prompt ? pending : undefined)
 }
 
 const handleFillPrompt = (prompt?: string) => {
@@ -336,22 +340,22 @@ const handleFillPrompt = (prompt?: string) => {
   message.success('已回填提示词到输入框')
 }
 
-const sendMessage = async (value?: string) => {
+const sendMessage = async (value?: string, recovery?: KnowledgeRequest) => {
   const content = value?.trim() || ''
   if (!content) { message.warning('请输入消息'); return false }
   if (generating.value) { message.warning('当前应用正在生成，请等待完成或停止后重试'); return false }
   const requestedAppId = appId.value
   const pendingKey = `generation:pending:${requestedAppId}`
-  let pending: { prompt: string; id: string } | undefined
-  try { pending = JSON.parse(localStorage.getItem(pendingKey) || 'null') || undefined } catch { /* 损坏的本地暂存按新请求处理。 */ }
-  const requestId = pending?.prompt === content ? pending.id : crypto.randomUUID()
-  localStorage.setItem(pendingKey, JSON.stringify({ prompt: content, id: requestId }))
+  const pending = readKnowledgeRequest(localStorage.getItem(pendingKey))
+  const submission = recovery || nextKnowledgeRequest(pending, content, useKnowledge.value, crypto.randomUUID())
+  const requestId = submission.id
+  localStorage.setItem(pendingKey, JSON.stringify(submission))
   prepareTaskSubmission(messages.value, content, requestId)
   generating.value = true
   streamFinished = false
   scrollToBottom()
   try {
-    const task = await startGenerationTask(requestedAppId, content, requestId)
+    const task = await startGenerationTask(requestedAppId, content, requestId, submission.useKnowledge)
     if (disposed || appId.value !== requestedAppId) return false
     localStorage.removeItem(pendingKey)
     receiveTask(task)
@@ -616,6 +620,7 @@ let hydrationEpoch = 0
 const hydratePage = async () => {
   const epoch = ++hydrationEpoch
   const currentPage = () => !disposed && epoch === hydrationEpoch
+  useKnowledge.value = takeFirstKnowledgeRequest(appId.value) ?? false
   closeStream()
   if (recoveryTimer) clearTimeout(recoveryTimer)
   activeTask.value = null
@@ -630,6 +635,7 @@ const hydratePage = async () => {
     const current = await getCurrentGenerationTask(appId.value)
     if (!currentPage()) return
     previewVisible.value = current.previewAvailable
+    const saved = readKnowledgeRequest(localStorage.getItem(`generation:pending:${appId.value}`))
     if (current.task) {
       receiveTask(current.task)
       const pendingKey = `generation:pending:${appId.value}`
@@ -638,6 +644,9 @@ const hydratePage = async () => {
         if (pending?.id === current.task.clientRequestId) localStorage.removeItem(pendingKey)
       } catch { localStorage.removeItem(pendingKey) }
       if (isTaskActive(current.task.status)) subscribeTask(current.task.id)
+      else if (saved && saved.id !== current.task.clientRequestId) await sendMessage(saved.prompt, saved)
+    } else if (saved) {
+      await sendMessage(saved.prompt, saved)
     } else if (historyLoaded && messages.value.length === 0 && appInfo.value.initPrompt) {
       await sendMessage(appInfo.value.initPrompt)
     }
@@ -949,8 +958,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <KnowledgeReferences v-if="isOwnApp" :app-id="appId" :refresh-key="`${activeTask?.id}:${activeTask?.status}`" />
         <AppChatComposer
           ref="composerRef"
+          v-model:use-knowledge="useKnowledge"
           :generating="generating"
           :edit-mode="editMode"
           :selected-element="selectedElement"

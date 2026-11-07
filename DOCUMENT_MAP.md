@@ -5,6 +5,7 @@
 
 | 职责 | 实际路径或外部位置 | 状态 | 定位依据/备注 |
 |---|---|---|---|
+| 个人知识库辅助代码生成 | [PRD](docs/vibe/phase/2026-11-07-private-knowledge-generation/PRD.md)、[设计](docs/vibe/phase/2026-11-07-private-knowledge-generation/PROPOSED_DESIGN.md)、[验收](docs/vibe/phase/2026-11-07-private-knowledge-generation/VERIFICATION.md)、[使用指南](docs/vibe/phase/2026-11-07-private-knowledge-generation/USER_GUIDE.md) | `PARTIAL` | 工具检索方案已批准；受控链路通过；中文质量未通过，默认关闭 |
 | Agent 规则 | [AGENTS.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/AGENTS.md) | `已核验` | 统一行为入口，索引并保留 [CLAUDE.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/CLAUDE.md) 规则 |
 | 产品范围与定位 | [PRODUCT.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/PRODUCT.md) | `已更新` | 描述系统核心定位、用户、端到端闭环与硬性约束；当前有效需求见 `p0-reliability/SPEC.md` |
 | 当前系统架构 | [docs/architecture-summary.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/architecture-summary.md) | `已核验` | 后端分层、数据流、LangChain4j/LangGraph4j 及存储全景，辅以 [langgraph4j-codegen-workflow.md](file:///Users/daiyifei/Documents/code/zero-code-generate/ai-code-generate/docs/langgraph4j-codegen-workflow.md) |
@@ -19,3 +20,5 @@
 | 测试与验证证据 | `src/test/`、`.evidence/` | `已核验` | 适用测试与运行证据见当前 Release 的 `VERIFICATION.md`，原始日志与截图存于忽略的 `.evidence/` |
 
 本文件只作导航，不复制需求、设计或验证结论。一个仓库只保留一个权威地图。
+
+新增需求统一归档到 `docs/vibe/phase/YYYY-MM-DD-功能名/`；既有阶段路径继续保留。新增个人知识库 API 见 [docs/vibe/API.md](docs/vibe/API.md)，术语见 [GLOSSARY.md](GLOSSARY.md)。

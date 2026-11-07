@@ -13,7 +13,10 @@ public final class TaskChatModel implements ChatModel {
     private final StreamingChatModel model;
     private final GenerationExecution execution;
     public TaskChatModel(StreamingChatModel model, GenerationExecution execution) {
-        this.model = UsageTrackingStreamingModel.wrap(model, new AppChatMemoryId(0L, 0L, execution.id()));
+        this(model, execution, false);
+    }
+    public TaskChatModel(StreamingChatModel model, GenerationExecution execution, boolean includeKnowledge) {
+        this.model = UsageTrackingStreamingModel.wrap(model, new AppChatMemoryId(0L, 0L, execution.id()), includeKnowledge);
         this.execution = execution;
     }
     @Override public ChatRequestParameters defaultRequestParameters() { return model.defaultRequestParameters(); }

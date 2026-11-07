@@ -14,8 +14,8 @@ langchain4j:
       base-url: https://api.deepseek.com        # OpenAI 兼容的 Base URL
       api-key: YOUR_CHAT_MODEL_API_KEY          # 你的 API Key
       model-name: deepseek-chat                 # 模型名
-      log-requests: true
-      log-responses: true
+      log-requests: false
+      log-responses: false
       max-retries: 3
 
     # 路由模型：AI 智能选择代码生成类型（推荐轻量快速模型，可留空自动回退主模型）
@@ -25,17 +25,35 @@ langchain4j:
       model-name: qwen-turbo
       max-tokens: 100
       max-retries: 3
-      log-requests: true
-      log-responses: true
+      log-requests: false
+      log-responses: false
 
     # 流式模型：SSE 逐 token 输出
     streaming-chat-model:
       base-url: https://api.deepseek.com
       api-key: YOUR_STREAMING_MODEL_API_KEY
       model-name: deepseek-chat
-      log-requests: true
-      log-responses: true
+      log-requests: false
+      log-responses: false
 
 # Pexels 图片搜索配置（工作流图片收集节点使用，可选）
 pexels:
   api-key: YOUR_PEXELS_API_KEY
+
+# 先执行 sql/migrations/20261107_private_knowledge.sql，再配置隔离的 Chroma 与本地 Ollama。
+# 开启前须验证中文正负样本。当前 nomic-embed-text 的中文样本验收未通过，不能仅凭模型已下载启用。
+knowledge:
+  enabled: false
+  ollama-url: http://127.0.0.1:11434
+  embedding-model: nomic-embed-text:latest
+  chroma-url: http://127.0.0.1:8000
+  max-file-bytes: 2097152
+  max-total-bytes: 20971520
+  max-documents: 50
+  chunk-size: 512
+  chunk-overlap: 64
+  candidates: 12
+  max-fragments: 6
+  max-context-chars: 6000
+  # 此值是初始配置，必须结合实际模型校准，不能视为已验证阈值。
+  min-score: 0.65

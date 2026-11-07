@@ -16,6 +16,7 @@ public class GenerationTask {
     private String prompt;
     private String codeGenType;
     private String generationMode;
+    private Boolean useKnowledge = false;
     private TaskStatus status = TaskStatus.STARTING;
     private String stage = "准备生成";
     private String message = "正在准备任务";

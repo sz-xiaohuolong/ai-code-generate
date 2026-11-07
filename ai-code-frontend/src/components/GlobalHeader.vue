@@ -21,6 +21,7 @@ const { loginUser, isLogin } = storeToRefs(loginUserStore)
 
 const menuItems = computed(() => {
   const items = [{ path: '/', title: '首页' }]
+  if (isLogin.value) items.push({ path: '/knowledge', title: '知识库' })
   if (loginUser.value.userRole === 'admin') {
     items.push({ path: '/admin/userManage', title: '用户管理' })
     items.push({ path: '/admin/appManage', title: '应用管理' })

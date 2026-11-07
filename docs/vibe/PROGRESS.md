@@ -1,5 +1,14 @@
 # 当前进度
 
+## 个人知识库辅助代码生成（2026-11-07）
+
+用户已批准 PRD／方案并授权 MVP 开发、人工验收说明和远程同步。需求 FROZEN、方案 APPROVED；实现及受控检查完成，质量验收 PARTIAL，默认 `knowledge.enabled=false`。中文模型正负样本不能可靠区分，已向用户询问是否对比其他本地模型，尚待决定；真实供应商生成效果未验收。
+
+独立交付树基于 `6fcf5d2`，保留主工作区并行任务。后端 18 类 65 项、前端 11 项、类型检查／构建及新增知识文件 lint 通过；六组合实际工厂／图／工具／修复接入使用受控模型验证。代码独立复审同意默认关闭同步，界面评审 ship；容器超限、来源补写与图片规划资料边界均已回归。原有 AppChatPage 的 7 项 lint 和服务关闭历史补记竞态已单独记录。
+
+[实施计划](phase/2026-11-07-private-knowledge-generation/IMPLEMENTATION_PLAN.md)、[验收及证据边界](phase/2026-11-07-private-knowledge-generation/VERIFICATION.md)、[业务流程与人工验收](phase/2026-11-07-private-knowledge-generation/USER_GUIDE.md)。T1～T4 实现完成，T5 代码交付收尾；模型质量与业务验收未完成，不宣称整个需求 VERIFIED。
+
+
 ## 当前任务：工具调用上下文裁剪（2026-10-20）
 
 - 状态：RELEASED（代码同步）；验证：VERIFIED（仅本任务离线 AC 范围；工作区及纯暂存区快照各 100 项相关测试通过，独立复审通过）。用户已授权文档先行、实现、测试、提交并推送 `origin/main`，不包含部署或付费模型测试。
