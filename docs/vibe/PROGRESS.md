@@ -6,7 +6,7 @@
 
 独立交付树基于 `6fcf5d2`，保留主工作区并行任务。后端 18 类 65 项、前端 11 项、类型检查／构建及新增知识文件 lint 通过；六组合实际工厂／图／工具／修复接入使用受控模型验证。代码独立复审同意默认关闭同步，界面评审 ship；容器超限、来源补写与图片规划资料边界均已回归。原有 AppChatPage 的 7 项 lint 和服务关闭历史补记竞态已单独记录。
 
-[实施计划](phase/2026-11-07-private-knowledge-generation/IMPLEMENTATION_PLAN.md)、[验收及证据边界](phase/2026-11-07-private-knowledge-generation/VERIFICATION.md)、[业务流程与人工验收](phase/2026-11-07-private-knowledge-generation/USER_GUIDE.md)。T1～T4 实现完成，T5 代码交付收尾；模型质量与业务验收未完成，不宣称整个需求 VERIFIED。
+[实施计划](phase/2026-11-07-private-knowledge-generation/IMPLEMENTATION_PLAN.md)、[验收及证据边界](phase/2026-11-07-private-knowledge-generation/VERIFICATION.md)、[业务流程与人工验收](phase/2026-11-07-private-knowledge-generation/USER_GUIDE.md)。T1～T4 实现完成，功能代码 `2e3dc3f` 已正常推送 origin/main 并核对远端哈希；T5 代码同步完成，模型质量与业务验收未完成，不宣称整个需求 VERIFIED。
 
 
 ## 当前任务：工具调用上下文裁剪（2026-10-20）
