@@ -6,11 +6,15 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 
 const route = useRoute()
 const isHomePage = computed(() => route.path === '/')
+const isAdminPage = computed(() => route.path.startsWith('/admin/'))
 const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
 </script>
 
 <template>
-  <a-layout class="basic-layout" :class="{ 'home-layout': isHomePage, 'chat-layout': isChatPage }">
+  <a-layout
+    class="basic-layout"
+    :class="{ 'home-layout': isHomePage, 'chat-layout': isChatPage, 'admin-layout': isAdminPage }"
+  >
     <a-layout-header class="layout-header">
       <GlobalHeader />
     </a-layout-header>
@@ -38,7 +42,7 @@ const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
   height: 58px;
   padding: 0;
   line-height: normal;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--ui-surface);
   border-bottom: 1px solid var(--ui-line);
   backdrop-filter: saturate(140%) blur(16px);
 }
@@ -88,6 +92,44 @@ const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
     height: auto;
     min-height: calc(100dvh - 58px);
     overflow: visible;
+  }
+}
+</style>
+
+<style scoped>
+.layout-header {
+  height: 64px;
+  background: var(--ui-surface);
+  backdrop-filter: none;
+}
+.layout-content {
+  min-height: calc(100dvh - 110px);
+}
+.chat-layout .layout-content {
+  height: calc(100dvh - 64px);
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.admin-layout .layout-content {
+  padding: 0 40px 48px;
+  background: var(--ui-surface);
+}
+.admin-layout .content-wrapper {
+  max-width: 1440px;
+}
+.admin-layout .layout-footer {
+  background: var(--ui-surface);
+}
+@media (max-width: 760px) {
+  .layout-header {
+    height: 58px;
+  }
+  .admin-layout .layout-content {
+    padding: 0 16px 28px;
+  }
+  .chat-layout .layout-content {
+    height: calc(100dvh - 58px);
   }
 }
 </style>

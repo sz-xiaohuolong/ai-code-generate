@@ -27,6 +27,7 @@
 
 | 阶段 | 需求入口 | 设计、计划与验收 | 状态及边界 |
 |---|---|---|---|
+| [2026-11-07-platform-ui-beautification](docs/vibe/phase/2026-11-07-platform-ui-beautification/)：平台 UI 美化 | [范围与批准](docs/vibe/phase/2026-11-07-platform-ui-beautification/PROPOSED_DESIGN.md) | [实施计划](docs/vibe/phase/2026-11-07-platform-ui-beautification/IMPLEMENTATION_PLAN.md)、[验收](docs/vibe/phase/2026-11-07-platform-ui-beautification/VERIFICATION.md) | 需求 FROZEN；首页、工作台与管理页已实施，受控前端验证完成；同步状态见进度 |
 | [2026-11-07-private-knowledge-generation](docs/vibe/phase/2026-11-07-private-knowledge-generation/)：个人知识库辅助代码生成 | [PRD](docs/vibe/phase/2026-11-07-private-knowledge-generation/PRD.md) | [方案设计](docs/vibe/phase/2026-11-07-private-knowledge-generation/PROPOSED_DESIGN.md) | 需求 FROZEN；工具检索方案 APPROVED；MVP 受控链路通过；已切换 BGE-M3，验收 PARTIAL，中文保留集 11/12、默认关闭 |
 | [2026-11-07-generation-observability-evaluation](docs/vibe/phase/2026-11-07-generation-observability-evaluation/)：生成追踪与独立质量评测 | [PRD](docs/vibe/phase/2026-11-07-generation-observability-evaluation/PRD.md) | [方案设计](docs/vibe/phase/2026-11-07-generation-observability-evaluation/PROPOSED_DESIGN.md)、[实施计划](docs/vibe/phase/2026-11-07-generation-observability-evaluation/IMPLEMENTATION_PLAN.md)、[验收](docs/vibe/phase/2026-11-07-generation-observability-evaluation/VERIFICATION.md) | 需求 FROZEN，设计 IMPLEMENTED；受控范围 VERIFIED；RELEASED（代码同步），功能提交 e987d7b 已推送；未部署 |
 | [2026-10-20-tool-context-pruning](docs/vibe/phase/2026-10-20-tool-context-pruning/)：工具调用上下文裁剪 | [综合记录](docs/vibe/phase/2026-10-20-tool-context-pruning/README.md) | 同一文档包含方案、验收条件、实施顺序与验证记录 | 已交付；离线冻结范围 VERIFIED |

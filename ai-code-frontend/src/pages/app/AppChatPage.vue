@@ -8,6 +8,8 @@ import {
   DownloadOutlined,
   ExportOutlined,
   InfoCircleOutlined,
+  ArrowLeftOutlined,
+  MoreOutlined,
   RocketOutlined,
   ReloadOutlined,
   MobileOutlined,
@@ -18,10 +20,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   CheckOutlined,
-  CheckCircleFilled,
   EditOutlined,
   SyncOutlined,
-  LockOutlined,
 } from '@ant-design/icons-vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/core'
@@ -58,15 +58,18 @@ import { getUserAvatar } from '@/constants/user'
 import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 import AppChatComposer from '@/components/AppChatComposer.vue'
 import KnowledgeReferences from '@/components/KnowledgeReferences.vue'
-import { nextKnowledgeRequest, readKnowledgeRequest, takeFirstKnowledgeRequest, type KnowledgeRequest } from '@/utils/knowledgeRequest'
+import {
+  nextKnowledgeRequest,
+  readKnowledgeRequest,
+  takeFirstKnowledgeRequest,
+  type KnowledgeRequest,
+} from '@/utils/knowledgeRequest'
 import GenerationTracePanel from '@/components/GenerationTracePanel.vue'
 import {
   GENERATION_MODE_LABELS,
   normalizeGenerationMode,
   isWorkflowHistoryComplete,
-  updateWorkflowProgress,
   WORKFLOW_STATUS_LABELS,
-  type WorkflowStep,
 } from '@/utils/workflowProgress'
 import {
   createVisualEditorBridge,
@@ -74,8 +77,21 @@ import {
   type VisualSelectedElement,
 } from '@/utils/visualEditor'
 
-import { applyTaskSnapshot, prepareTaskSubmission, isTaskActive, type GenerationTask, type TaskChatMessage } from '@/utils/generationTask'
-import { startGenerationTask, getGenerationTask, getCurrentGenerationTask, stopGenerationTask, generationEventsUrl, TaskApiError } from '@/api/generationTask'
+import {
+  applyTaskSnapshot,
+  prepareTaskSubmission,
+  isTaskActive,
+  type GenerationTask,
+  type TaskChatMessage,
+} from '@/utils/generationTask'
+import {
+  startGenerationTask,
+  getGenerationTask,
+  getCurrentGenerationTask,
+  stopGenerationTask,
+  generationEventsUrl,
+  TaskApiError,
+} from '@/api/generationTask'
 type ChatMessage = TaskChatMessage
 
 type ViewportMode = 'desktop' | 'tablet' | 'mobile'
@@ -89,7 +105,9 @@ const appId = computed(() => String(route.params.id))
 const useKnowledge = ref(false)
 const appInfo = ref<API.AppVO>({})
 const isWorkflow = computed(() => appInfo.value.generationMode === 'workflow')
-const generationModeLabel = computed(() => GENERATION_MODE_LABELS[normalizeGenerationMode(appInfo.value.generationMode)])
+const generationModeLabel = computed(
+  () => GENERATION_MODE_LABELS[normalizeGenerationMode(appInfo.value.generationMode)],
+)
 const messages = ref<ChatMessage[]>([])
 const historyLoading = ref(false)
 const hasMoreHistory = ref(false)
@@ -112,12 +130,29 @@ let disposed = false
 let visualEditorBridge: ReturnType<typeof createVisualEditorBridge> | null = null
 
 // 工作台分栏与视口状态
-const leftWidthPercent = ref(38)
+const leftWidthPercent = ref(36)
+const compactScreen = window.matchMedia('(max-width: 959px)')
+const isCompact = ref(compactScreen.matches)
+const syncCompactScreen = (event: MediaQueryListEvent) => {
+  isCompact.value = event.matches
+}
+const mobilePane = ref<'chat' | ViewMode>('chat')
+const traceButton = ref<HTMLButtonElement | null>(null)
+const handleTraceOpenChange = (open: boolean) => {
+  if (!open) traceButton.value?.focus()
+}
+const selectMobilePane = (pane: 'chat' | ViewMode) => {
+  mobilePane.value = pane
+  if (pane !== 'chat') currentViewMode.value = pane
+}
 const isDragging = ref(false)
 const isLeftCollapsed = ref(false)
 const workspaceRef = ref<HTMLElement | null>(null)
 const viewportMode = ref<ViewportMode>('desktop')
 const currentViewMode = ref<ViewMode>('preview')
+watch(currentViewMode, (mode) => {
+  if (isCompact.value) mobilePane.value = mode
+})
 const iframeKey = ref(0)
 const copied = ref(false)
 const messagesContainerRef = ref<HTMLElement | null>(null)
@@ -140,13 +175,13 @@ const markdown = new MarkdownIt({
     if (lang && hljs.getLanguage(lang)) {
       try {
         return `<pre class="hljs"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`
-      } catch (error) {
+      } catch {
         return ''
       }
     }
     try {
       return `<pre class="hljs"><code>${hljs.highlightAuto(code).value}</code></pre>`
-    } catch (error) {
+    } catch {
       return ''
     }
   },
@@ -172,8 +207,12 @@ const canOperate = computed(() => {
 })
 
 const isOwnApp = computed(() => {
-  return !!loginUser.value.id && !!appInfo.value.userId && String(appInfo.value.id) === appId.value
-    && String(appInfo.value.userId) === String(loginUser.value.id)
+  return (
+    !!loginUser.value.id &&
+    !!appInfo.value.userId &&
+    String(appInfo.value.id) === appId.value &&
+    String(appInfo.value.userId) === String(loginUser.value.id)
+  )
 })
 
 const creatorName = computed(() => {
@@ -216,7 +255,9 @@ const exitEditMode = () => {
 }
 
 const toChatMessage = (record: API.ChatHistoryVO): ChatMessage => {
-  const failed = record.messageType === 'ai' && /^(生成未完成：|工作流生成失败：|工作流已中断|AI 回复失败：)/.test(record.message || '')
+  const failed =
+    record.messageType === 'ai' &&
+    /^(生成未完成：|工作流生成失败：|工作流已中断|AI 回复失败：)/.test(record.message || '')
   return {
     id: record.id,
     role: record.messageType === 'ai' ? 'ai' : 'user',
@@ -263,9 +304,9 @@ const loadHistory = async (loadMore = false) => {
       if (!loadMore) {
         previewVisible.value = isWorkflow.value
           ? isWorkflowHistoryComplete(records[records.length - 1])
-          : (res.data.data.totalRow || records.length) >= 2
-            && historyMessages[historyMessages.length - 1]?.role === 'ai'
-            && historyMessages[historyMessages.length - 1]?.stage !== 'error'
+          : (res.data.data.totalRow || records.length) >= 2 &&
+            historyMessages[historyMessages.length - 1]?.role === 'ai' &&
+            historyMessages[historyMessages.length - 1]?.stage !== 'error'
         scrollToBottom()
       }
       return true
@@ -296,7 +337,10 @@ const receiveTask = (task: GenerationTask) => {
   streamFinished = !generating.value
   if (streamFinished) {
     closeStream()
-    if (task.status === 'SUCCEEDED' && (previous?.id !== task.id || previous.status !== 'SUCCEEDED')) {
+    if (
+      task.status === 'SUCCEEDED' &&
+      (previous?.id !== task.id || previous.status !== 'SUCCEEDED')
+    ) {
       iframeKey.value++
       loadAppInfo()
     }
@@ -309,26 +353,42 @@ const subscribeTask = (id: string) => {
   connectionLost.value = false
   eventSource = new EventSource(generationEventsUrl(id), { withCredentials: true })
   eventSource.addEventListener('task-snapshot', (event: MessageEvent) => {
-    try { receiveTask(JSON.parse(event.data) as GenerationTask) }
-    catch { message.error('任务状态解析失败，请刷新恢复') }
+    try {
+      receiveTask(JSON.parse(event.data) as GenerationTask)
+    } catch {
+      message.error('任务状态解析失败，请刷新恢复')
+    }
   })
-  eventSource.onopen = () => { connectionLost.value = false }
+  eventSource.onopen = () => {
+    connectionLost.value = false
+  }
   eventSource.onerror = () => {
     if (streamFinished || disposed) return
     connectionLost.value = true
     if (recoveryTimer) clearTimeout(recoveryTimer)
     recoveryTimer = setTimeout(async () => {
-      try { receiveTask(await getGenerationTask(id)) }
-      catch (error) { if (error instanceof TaskApiError) closeStream() }
+      try {
+        receiveTask(await getGenerationTask(id))
+      } catch (error) {
+        if (error instanceof TaskApiError) closeStream()
+      }
     }, 1000)
   }
 }
 
 const stopGeneration = async () => {
   if (!activeTask.value || !generating.value || activeTask.value.status === 'STOPPING') return
-  activeTask.value = { ...activeTask.value, status: 'STOPPING', stage: '正在停止', message: '正在等待后台资源清理' }
-  try { receiveTask(await stopGenerationTask(activeTask.value.id)) }
-  catch { message.warning('停止请求尚未确认，任务状态会继续更新') }
+  activeTask.value = {
+    ...activeTask.value,
+    status: 'STOPPING',
+    stage: '正在停止',
+    message: '正在等待后台资源清理',
+  }
+  try {
+    receiveTask(await stopGenerationTask(activeTask.value.id))
+  } catch {
+    message.warning('停止请求尚未确认，任务状态会继续更新')
+  }
 }
 
 const handleRetry = (prompt?: string) => {
@@ -345,12 +405,19 @@ const handleFillPrompt = (prompt?: string) => {
 
 const sendMessage = async (value?: string, recovery?: KnowledgeRequest) => {
   const content = value?.trim() || ''
-  if (!content) { message.warning('请输入消息'); return false }
-  if (generating.value) { message.warning('当前应用正在生成，请等待完成或停止后重试'); return false }
+  if (!content) {
+    message.warning('请输入消息')
+    return false
+  }
+  if (generating.value) {
+    message.warning('当前应用正在生成，请等待完成或停止后重试')
+    return false
+  }
   const requestedAppId = appId.value
   const pendingKey = `generation:pending:${requestedAppId}`
   const pending = readKnowledgeRequest(localStorage.getItem(pendingKey))
-  const submission = recovery || nextKnowledgeRequest(pending, content, useKnowledge.value, crypto.randomUUID())
+  const submission =
+    recovery || nextKnowledgeRequest(pending, content, useKnowledge.value, crypto.randomUUID())
   const requestId = submission.id
   localStorage.setItem(pendingKey, JSON.stringify(submission))
   prepareTaskSubmission(messages.value, content, requestId)
@@ -358,7 +425,12 @@ const sendMessage = async (value?: string, recovery?: KnowledgeRequest) => {
   streamFinished = false
   scrollToBottom()
   try {
-    const task = await startGenerationTask(requestedAppId, content, requestId, submission.useKnowledge)
+    const task = await startGenerationTask(
+      requestedAppId,
+      content,
+      requestId,
+      submission.useKnowledge,
+    )
     if (disposed || appId.value !== requestedAppId) return false
     localStorage.removeItem(pendingKey)
     receiveTask(task)
@@ -367,13 +439,17 @@ const sendMessage = async (value?: string, recovery?: KnowledgeRequest) => {
   } catch (error) {
     if (disposed || appId.value !== requestedAppId) return false
     generating.value = false
-    const last = messages.value.find((item) => item.role === 'ai' && item.clientRequestId === requestId)
+    const last = messages.value.find(
+      (item) => item.role === 'ai' && item.clientRequestId === requestId,
+    )
     if (last) {
       last.stage = 'error'
       last.errorMessage = error instanceof Error ? error.message : '创建任务失败，请重试'
     }
     if (error instanceof TaskApiError) localStorage.removeItem(pendingKey)
-    message.error(error instanceof TaskApiError ? error.message : '请求结果尚未确认，重试会复用同一请求标识')
+    message.error(
+      error instanceof TaskApiError ? error.message : '请求结果尚未确认，重试会复用同一请求标识',
+    )
     return false
   }
 }
@@ -398,6 +474,7 @@ const toggleEditMode = async () => {
   const enabled = visualEditorBridge?.enable()
   if (enabled) {
     editMode.value = true
+    if (isCompact.value) mobilePane.value = 'preview'
     message.info('点选模式已开启：在右侧网站中点击需要调整的元素')
   }
 }
@@ -558,7 +635,7 @@ const handleDownloadCode = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(downloadUrl)
     message.success('已打包并开始下载')
-  } catch (error) {
+  } catch {
     message.error('下载失败，请稍后重试')
   } finally {
     downloading.value = false
@@ -645,35 +722,44 @@ const hydratePage = async () => {
       try {
         const pending = JSON.parse(localStorage.getItem(pendingKey) || 'null')
         if (pending?.id === current.task.clientRequestId) localStorage.removeItem(pendingKey)
-      } catch { localStorage.removeItem(pendingKey) }
+      } catch {
+        localStorage.removeItem(pendingKey)
+      }
       if (isTaskActive(current.task.status)) subscribeTask(current.task.id)
-      else if (saved && saved.id !== current.task.clientRequestId) await sendMessage(saved.prompt, saved)
+      else if (saved && saved.id !== current.task.clientRequestId)
+        await sendMessage(saved.prompt, saved)
     } else if (saved) {
       await sendMessage(saved.prompt, saved)
     } else if (historyLoaded && messages.value.length === 0 && appInfo.value.initPrompt) {
       await sendMessage(appInfo.value.initPrompt)
     }
-  } catch { message.warning('任务状态暂时无法恢复，请稍后刷新；后台任务会继续执行') }
+  } catch {
+    message.warning('任务状态暂时无法恢复，请稍后刷新；后台任务会继续执行')
+  }
 }
-watch(appId, () => { hydratePage() })
+watch(appId, () => {
+  hydratePage()
+})
 
 onMounted(() => {
   visualEditorBridge = createVisualEditorBridge({
     getIframe: () => previewFrameRef.value,
     onElementSelected: (element) => {
       selectedElement.value = element
+      if (isCompact.value) mobilePane.value = 'chat'
     },
     onError: (errorMessage) => {
       message.warning(errorMessage)
     },
   })
+  compactScreen.addEventListener('change', syncCompactScreen)
   window.addEventListener('keydown', handleGlobalKeydown)
   hydratePage()
-
 })
 
 onBeforeUnmount(() => {
   disposed = true
+  compactScreen.removeEventListener('change', syncCompactScreen)
   if (recoveryTimer) clearTimeout(recoveryTimer)
   closeStream()
   visualEditorBridge?.dispose()
@@ -686,179 +772,115 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="chat-page">
-    <!-- 顶部工作台导航条 (Stratum 级三段论高密聚合) -->
     <header class="chat-topbar">
-      <!-- 段落 1: 项目标识与状态 (Identity) -->
       <div class="topbar-section section-left">
-        <a-tooltip :title="isLeftCollapsed ? '展开对话面板 (⌘\\)' : '折叠对话 (⌘\\)'">
-          <button type="button" class="collapse-toggle-btn" aria-label="切换侧栏折叠" @click="toggleLeftCollapse">
-            <MenuUnfoldOutlined v-if="isLeftCollapsed" />
-            <MenuFoldOutlined v-else />
-          </button>
-        </a-tooltip>
-
+        <RouterLink to="/" class="back-to-apps" aria-label="返回全部作品"
+          ><ArrowLeftOutlined
+        /></RouterLink>
+        <button
+          v-if="!isCompact"
+          type="button"
+          class="collapse-toggle-btn"
+          :aria-label="isLeftCollapsed ? '展开对话面板' : '折叠对话面板'"
+          @click="toggleLeftCollapse"
+        >
+          <MenuUnfoldOutlined v-if="isLeftCollapsed" /><MenuFoldOutlined v-else />
+        </button>
         <div class="app-brand-info">
-          <span class="app-name" :title="appInfo.appName">{{ appInfo.appName || 'AI 网页生成' }}</span>
-          <span v-if="appInfo.codeGenType" class="type-badge">{{ codeGenTypeLabel }}</span>
-          <span v-if="appInfo.id" class="type-badge generation-mode-badge" title="模式在应用创建时确定">{{ generationModeLabel }}</span>
-          <span v-if="generating" class="status-indicator live">
-            <span class="pulse-point" /> 构建中
-          </span>
-          <span v-else-if="appInfo.deployKey" class="status-indicator deployed">
-            <span class="solid-point" /> 已部署
-          </span>
+          <h1 class="app-name" :title="appInfo.appName">{{ appInfo.appName || '应用工作台' }}</h1>
+          <span
+            v-if="appInfo.id"
+            class="type-badge generation-mode-badge"
+            title="模式在应用创建时确定"
+            >{{ generationModeLabel }}</span
+          >
         </div>
       </div>
-
-      <!-- 段落 2: 视口与查看模式 Segmented 切换 (Center) -->
-      <div class="topbar-section section-center">
-        <!-- 预览 / 代码 双模分段控制器 -->
-        <div class="segmented-control mode-switcher" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="currentViewMode === 'preview'"
-            class="segmented-btn"
-            :class="{ active: currentViewMode === 'preview' }"
-            title="预览沙盒 (⌘E)"
-            @click="currentViewMode = 'preview'"
-          >
-            <EyeOutlined />
-            <span>预览</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            :aria-selected="currentViewMode === 'code'"
-            class="segmented-btn"
-            :class="{ active: currentViewMode === 'code' }"
-            title="代码查看 (⌘E)"
-            @click="currentViewMode = 'code'"
-          >
-            <CodeOutlined />
-            <span>代码</span>
-          </button>
-        </div>
-
-        <!-- 响应式多端尺寸切换 (仅预览模式生效) -->
-        <div v-if="currentViewMode === 'preview'" class="segmented-control viewport-switcher" role="radiogroup">
-          <button
-            type="button"
-            role="radio"
-            :aria-checked="viewportMode === 'desktop'"
-            class="segmented-icon-btn"
-            :class="{ active: viewportMode === 'desktop' }"
-            title="桌面端自适应"
-            aria-label="桌面端自适应"
-            @click="viewportMode = 'desktop'"
-          >
-            <DesktopOutlined />
-          </button>
-          <button
-            type="button"
-            role="radio"
-            :aria-checked="viewportMode === 'tablet'"
-            class="segmented-icon-btn"
-            :class="{ active: viewportMode === 'tablet' }"
-            title="平板端 (768px)"
-            aria-label="平板端 (768px)"
-            @click="viewportMode = 'tablet'"
-          >
-            <TabletOutlined />
-          </button>
-          <button
-            type="button"
-            role="radio"
-            :aria-checked="viewportMode === 'mobile'"
-            class="segmented-icon-btn"
-            :class="{ active: viewportMode === 'mobile' }"
-            title="手机端 (375px)"
-            aria-label="手机端 (375px)"
-            @click="viewportMode = 'mobile'"
-          >
-            <MobileOutlined />
-          </button>
-        </div>
-      </div>
-
-      <!-- 段落 3: 动作操作与发布 (Actions) -->
       <div class="topbar-section section-right">
-        <!-- 画布辅助快捷动作 -->
-        <div v-if="currentViewMode === 'preview'" class="canvas-action-group">
-          <a-tooltip title="重新加载预览 (⌘⇧R)">
-            <button
-              type="button"
-              class="ghost-icon-btn"
-              :disabled="!previewUrl"
-              aria-label="重新加载预览"
-              @click="refreshPreview"
-            >
-              <ReloadOutlined />
-            </button>
-          </a-tooltip>
-          <a-tooltip title="在新窗口打开独立预览">
-            <button
-              type="button"
-              class="ghost-icon-btn"
-              :disabled="!previewVisible || !previewUrl"
-              aria-label="在新窗口打开独立预览"
-              @click="openPreview"
-            >
-              <ExportOutlined />
-            </button>
-          </a-tooltip>
-        </div>
-
-        <div class="topbar-divider" />
-
-        <div class="action-btn-group">
-          <button v-if="isOwnApp" type="button" class="ghost-text-btn" :aria-expanded="tracePanelVisible" aria-controls="generation-trace-panel" @click="tracePanelVisible = !tracePanelVisible">
-            <span>生成记录</span>
+        <button
+          v-if="isOwnApp"
+          ref="traceButton"
+          type="button"
+          class="ghost-text-btn trace-trigger"
+          :aria-expanded="tracePanelVisible"
+          aria-controls="generation-trace-panel"
+          @click="tracePanelVisible = true"
+        >
+          生成记录
+        </button>
+        <a-dropdown :trigger="['click']" placement="bottomRight">
+          <button type="button" class="ghost-icon-btn more-actions" aria-label="更多应用操作">
+            <MoreOutlined />
           </button>
-          <button type="button" class="ghost-text-btn" @click="detailModalVisible = true">
-            <InfoCircleOutlined />
-            <span>详情</span>
-          </button>
-          <button
-            type="button"
-            class="ghost-text-btn"
-            :disabled="downloading"
-            @click="handleDownloadCode"
+          <template #overlay
+            ><a-menu>
+              <a-menu-item key="details" @click="detailModalVisible = true"
+                ><InfoCircleOutlined /> 应用详情</a-menu-item
+              >
+              <a-menu-item key="download" :disabled="downloading" @click="handleDownloadCode"
+                ><DownloadOutlined /> {{ downloading ? '正在打包…' : '下载代码' }}</a-menu-item
+              >
+            </a-menu></template
           >
-            <SyncOutlined v-if="downloading" spin />
-            <DownloadOutlined v-else />
-            <span>下载代码</span>
-          </button>
-          <button
-            type="button"
-            class="primary-action-btn"
-            :disabled="deploying"
-            @click="handleDeploy"
-          >
-            <SyncOutlined v-if="deploying" spin />
-            <RocketOutlined v-else />
-            <span>部署上线</span>
-          </button>
-        </div>
+        </a-dropdown>
+        <button
+          type="button"
+          class="primary-action-btn"
+          :disabled="deploying"
+          @click="handleDeploy"
+        >
+          <SyncOutlined v-if="deploying" spin /><RocketOutlined v-else /><span>{{
+            deploying ? '正在部署' : '部署上线'
+          }}</span>
+        </button>
       </div>
     </header>
-
-    <GenerationTracePanel
-      v-if="isOwnApp && tracePanelVisible"
-      id="generation-trace-panel"
-      :app-id="appId"
-      :task-id="activeTask?.id"
-      :task-active="generating"
-      @close="tracePanelVisible = false"
-    />
+    <nav v-if="isCompact" class="mobile-workspace-tabs" aria-label="工作区视图">
+      <button
+        v-for="pane in ['chat', 'preview', 'code'] as const"
+        :key="pane"
+        type="button"
+        :aria-pressed="mobilePane === pane"
+        @click="selectMobilePane(pane)"
+      >
+        {{ pane === 'chat' ? '对话' : pane === 'preview' ? '预览' : '代码' }}
+      </button>
+    </nav>
+    <a-drawer
+      v-if="isOwnApp"
+      v-model:open="tracePanelVisible"
+      title="生成记录"
+      width="min(520px, 100%)"
+      root-class-name="trace-drawer"
+      destroy-on-close
+      @after-open-change="handleTraceOpenChange"
+    >
+      <GenerationTracePanel
+        v-if="tracePanelVisible"
+        id="generation-trace-panel"
+        embedded
+        :app-id="appId"
+        :task-id="activeTask?.id"
+        :task-active="generating"
+        @close="tracePanelVisible = false"
+      />
+    </a-drawer>
     <div v-if="generating" class="generation-task-status" role="status">
       <SyncOutlined spin />
       <strong>{{ activeTask?.stage || '正在创建任务' }}</strong>
-      <span>{{ connectionLost ? '连接恢复中，后台任务继续执行' : (activeTask?.message || '正在确认任务') }}</span>
-      <span v-if="previewVisible">右侧保留上次成功版本</span>
-      <button type="button" class="stop-stream-btn" :disabled="!activeTask || activeTask.status === 'STOPPING'" @click="stopGeneration">停止生成</button>
+      <span>{{
+        connectionLost ? '连接恢复中，后台任务继续执行' : activeTask?.message || '正在确认任务'
+      }}</span>
+      <span v-if="previewVisible">预览保留上次成功版本</span>
+      <button
+        type="button"
+        class="stop-stream-btn"
+        :disabled="!activeTask || activeTask.status === 'STOPPING'"
+        @click="stopGeneration"
+      >
+        停止生成
+      </button>
     </div>
-
 
     <!-- 工作台双栏布局 -->
     <div
@@ -868,8 +890,9 @@ onBeforeUnmount(() => {
     >
       <!-- 左侧：AI 对话与控制流 -->
       <section
-        v-show="!isLeftCollapsed"
+        v-show="isCompact || !isLeftCollapsed"
         class="chat-panel"
+        :class="{ 'mobile-hidden': mobilePane !== 'chat' }"
         :style="{ width: `${leftWidthPercent}%` }"
       >
         <div class="panel-header">
@@ -891,6 +914,14 @@ onBeforeUnmount(() => {
 
         <div ref="messagesContainerRef" class="messages">
           <div
+            v-if="historyLoading && !messages.length"
+            class="chat-loading"
+            role="status"
+            aria-label="正在加载对话"
+          >
+            <a-skeleton active :paragraph="{ rows: 5 }" />
+          </div>
+          <div
             v-for="(item, index) in messages"
             :key="item.id || `${item.role}-${index}`"
             class="message-row"
@@ -898,29 +929,64 @@ onBeforeUnmount(() => {
           >
             <div v-if="item.role === 'ai'" class="ai-avatar-icon">AI</div>
             <div class="message-bubble" :class="{ 'is-error': item.stage === 'error' }">
-              <div v-if="isWorkflow && item.workflowSteps?.length" class="workflow-progress" aria-live="polite">
+              <div
+                v-if="isWorkflow && item.workflowSteps?.length"
+                class="workflow-progress"
+                aria-live="polite"
+              >
                 <div class="workflow-progress-title">
                   <span>工作流进度</span>
-                  <button v-if="generating && index === messages.length - 1" type="button" class="stop-gen-btn" @click="stopGeneration">终止</button>
+                  <button
+                    v-if="generating && index === messages.length - 1"
+                    type="button"
+                    class="stop-gen-btn"
+                    @click="stopGeneration"
+                  >
+                    终止
+                  </button>
                 </div>
-                <div v-for="step in item.workflowSteps" :key="step.id" class="workflow-step" :class="step.status">
+                <div
+                  v-for="step in item.workflowSteps"
+                  :key="step.id"
+                  class="workflow-step"
+                  :class="step.status"
+                >
                   <SyncOutlined v-if="step.status === 'running'" spin />
                   <CheckOutlined v-else-if="step.status === 'completed'" />
-                  <span v-else class="workflow-step-mark">{{ step.status === 'failed' ? '!' : '·' }}</span>
+                  <span v-else class="workflow-step-mark">{{
+                    step.status === 'failed' ? '!' : '·'
+                  }}</span>
                   <div class="workflow-step-body">
-                    <span>{{ step.name }}<small v-if="step.retryCount"> · 已修复 {{ step.retryCount }} 次</small></span>
+                    <span
+                      >{{ step.name
+                      }}<small v-if="step.retryCount">
+                        · 已修复 {{ step.retryCount }} 次</small
+                      ></span
+                    >
                     <p>{{ step.message }}</p>
                   </div>
-                  <span class="workflow-step-status">{{ WORKFLOW_STATUS_LABELS[step.status] }}</span>
+                  <span class="workflow-step-status">{{
+                    WORKFLOW_STATUS_LABELS[step.status]
+                  }}</span>
                 </div>
               </div>
               <!-- 业务异常恢复卡片 (Error Recovery Card) -->
               <div v-if="item.stage === 'error'" class="error-recovery-card">
                 <div class="error-card-header">
-                  <span class="error-badge">{{ item.taskStatus === 'CANCELLED' ? '已停止' : item.taskStatus === 'TIMED_OUT' ? '已超时' : item.taskStatus === 'INTERRUPTED' ? '服务中断' : '生成异常' }}</span>
+                  <span class="error-badge">{{
+                    item.taskStatus === 'CANCELLED'
+                      ? '已停止'
+                      : item.taskStatus === 'TIMED_OUT'
+                        ? '已超时'
+                        : item.taskStatus === 'INTERRUPTED'
+                          ? '服务中断'
+                          : '生成异常'
+                  }}</span>
                   <span class="error-title">{{ item.errorMessage || 'AI 生成未能顺利完成' }}</span>
                 </div>
-                <p class="error-card-desc">您可直接重试或修改需求；本次任务不会覆盖此前的成功版本。</p>
+                <p class="error-card-desc">
+                  您可直接重试或修改需求；本次任务不会覆盖此前的成功版本。
+                </p>
                 <div class="error-card-actions">
                   <button
                     v-if="item.rawPrompt"
@@ -945,7 +1011,10 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- 标准模式等待输出时只展示当前任务状态。 -->
-              <div v-else-if="item.role === 'ai' && generating && !item.content && !isWorkflow" class="stream-telemetry-bar">
+              <div
+                v-else-if="item.role === 'ai' && generating && !item.content && !isWorkflow"
+                class="stream-telemetry-bar"
+              >
                 <div class="telemetry-info">
                   <SyncOutlined spin />
                   <span>{{ activeTask?.stage || '正在创建任务' }}</span>
@@ -956,8 +1025,7 @@ onBeforeUnmount(() => {
               <template v-else-if="item.role === 'ai'">
                 <div v-if="generating && item.stage === 'coding'" class="stream-telemetry-bar">
                   <div class="telemetry-info">
-                    <span class="telemetry-pulse" />
-                    <span class="telemetry-label">STREAMING CODE</span>
+                    <span class="telemetry-label">正在生成代码</span>
                     <span class="telemetry-count">{{ item.content.length }} 字符已接收</span>
                   </div>
                   <button type="button" class="stop-stream-btn" @click="stopGeneration">
@@ -973,7 +1041,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <KnowledgeReferences v-if="isOwnApp" :app-id="appId" :refresh-key="`${activeTask?.id}:${activeTask?.status}`" />
+        <KnowledgeReferences
+          v-if="isOwnApp"
+          :app-id="appId"
+          :refresh-key="`${activeTask?.id}:${activeTask?.status}`"
+        />
         <AppChatComposer
           ref="composerRef"
           v-model:use-knowledge="useKnowledge"
@@ -1005,7 +1077,108 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- 右侧：无边框工程沙盒视口与代码查看器 (Stratum 级纯净画布) -->
-      <section class="preview-panel">
+      <section class="preview-panel" :class="{ 'mobile-hidden': mobilePane === 'chat' }">
+        <div class="preview-toolbar">
+          <!-- 段落 2: 视口与查看模式 Segmented 切换 (Center) -->
+          <div class="preview-controls">
+            <!-- 预览 / 代码 双模分段控制器 -->
+            <div class="segmented-control mode-switcher" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="currentViewMode === 'preview'"
+                class="segmented-btn"
+                :class="{ active: currentViewMode === 'preview' }"
+                title="预览沙盒 (⌘E)"
+                @click="currentViewMode = 'preview'"
+              >
+                <EyeOutlined />
+                <span>预览</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="currentViewMode === 'code'"
+                class="segmented-btn"
+                :class="{ active: currentViewMode === 'code' }"
+                title="代码查看 (⌘E)"
+                @click="currentViewMode = 'code'"
+              >
+                <CodeOutlined />
+                <span>代码</span>
+              </button>
+            </div>
+
+            <!-- 响应式多端尺寸切换 (仅预览模式生效) -->
+            <div
+              v-if="currentViewMode === 'preview'"
+              class="segmented-control viewport-switcher"
+              role="radiogroup"
+            >
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="viewportMode === 'desktop'"
+                class="segmented-icon-btn"
+                :class="{ active: viewportMode === 'desktop' }"
+                title="桌面端自适应"
+                aria-label="桌面端自适应"
+                @click="viewportMode = 'desktop'"
+              >
+                <DesktopOutlined />
+              </button>
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="viewportMode === 'tablet'"
+                class="segmented-icon-btn"
+                :class="{ active: viewportMode === 'tablet' }"
+                title="平板端 (768px)"
+                aria-label="平板端 (768px)"
+                @click="viewportMode = 'tablet'"
+              >
+                <TabletOutlined />
+              </button>
+              <button
+                type="button"
+                role="radio"
+                :aria-checked="viewportMode === 'mobile'"
+                class="segmented-icon-btn"
+                :class="{ active: viewportMode === 'mobile' }"
+                title="手机端 (375px)"
+                aria-label="手机端 (375px)"
+                @click="viewportMode = 'mobile'"
+              >
+                <MobileOutlined />
+              </button>
+            </div>
+          </div>
+
+          <div v-if="currentViewMode === 'preview'" class="canvas-action-group">
+            <a-tooltip title="重新加载预览 (⌘⇧R)">
+              <button
+                type="button"
+                class="ghost-icon-btn"
+                :disabled="!previewUrl"
+                aria-label="重新加载预览"
+                @click="refreshPreview"
+              >
+                <ReloadOutlined />
+              </button>
+            </a-tooltip>
+            <a-tooltip title="在新窗口打开独立预览">
+              <button
+                type="button"
+                class="ghost-icon-btn"
+                :disabled="!previewVisible || !previewUrl"
+                aria-label="在新窗口打开独立预览"
+                @click="openPreview"
+              >
+                <ExportOutlined />
+              </button>
+            </a-tooltip>
+          </div>
+        </div>
         <div class="sandbox-stage">
           <!-- 拖拽期间覆盖层，防止 iframe 捕获 mouse 事件 -->
           <div v-if="isDragging" class="drag-prevent-overlay" />
@@ -1016,7 +1189,7 @@ onBeforeUnmount(() => {
             class="viewport-wrapper"
             :class="`mode-${viewportMode}`"
           >
-            <div v-if="previewVisible && previewUrl" class="device-frame">
+            <div v-if="previewVisible && previewUrl" class="preview-surface">
               <iframe
                 ref="previewFrameRef"
                 :key="previewUrl + iframeKey"
@@ -1031,7 +1204,7 @@ onBeforeUnmount(() => {
                 <CodeOutlined />
               </div>
               <h3 class="empty-title">等待代码生成</h3>
-              <p class="empty-desc">在左侧输入需求并发送，AI 生成的网站将实时渲染在此高精沙盒中</p>
+              <p class="empty-desc">描述需求并发送，生成成功后在这里查看和调整应用。</p>
             </div>
           </div>
 
@@ -1040,11 +1213,11 @@ onBeforeUnmount(() => {
             <div class="code-viewer-toolbar">
               <div class="code-file-label">
                 <CodeOutlined />
-                <span class="file-name">{{ appInfo.appName || 'index' }}.html</span>
+                <span class="file-name">最近回复中的代码</span>
                 <span class="file-lines">{{ codeLines.length }} 行</span>
               </div>
               <button type="button" class="copy-code-btn" @click="handleCopyCode">
-                <CheckOutlined v-if="copied" style="color: #10b981" />
+                <CheckOutlined v-if="copied" style="color: var(--ui-success)" />
                 <CopyOutlined v-else />
                 <span>{{ copied ? '已复制' : '复制代码' }}</span>
               </button>
@@ -1112,7 +1285,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .workflow-progress {
   margin-bottom: 16px;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--ui-line);
   border-radius: 10px;
   background: var(--ui-surface);
@@ -1128,27 +1301,66 @@ onBeforeUnmount(() => {
 .workflow-step {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
   padding: 8px 0;
   font-size: 12px;
 }
-.workflow-step > .anticon, .workflow-step-mark {
+.workflow-step > .anticon,
+.workflow-step-mark {
   flex: none;
   width: 16px;
-  margin-top: 2px;
+  margin-top: 4px;
   text-align: center;
 }
-.workflow-step-body { flex: 1; min-width: 0; }
-.workflow-step-body p { margin: 4px 0 0; color: var(--ui-ink-faint); font-size: 11px; }
-.workflow-step-body small { font-size: 10px; color: var(--ui-ink-faint); }
-.workflow-step-status { flex: none; font-size: 10px; color: var(--ui-ink-faint); }
-.workflow-step.running > .anticon, .workflow-step.running .workflow-step-status { color: var(--ui-accent); }
-.workflow-step.completed > .anticon { color: #3d8762; }
-.workflow-step.skipped .workflow-step-status, .workflow-step.retrying .workflow-step-status { color: #ad7a28; }
-.workflow-step.failed .workflow-step-status, .workflow-step.failed .workflow-step-mark { color: #c14c4c; }
-.generation-mode-badge { white-space: nowrap; }
+.workflow-step-body {
+  flex: 1;
+  min-width: 0;
+}
+.workflow-step-body p {
+  margin: 4px 0 0;
+  color: var(--ui-ink-faint);
+  font-size: 11px;
+}
+.workflow-step-body small {
+  font-size: 10px;
+  color: var(--ui-ink-faint);
+}
+.workflow-step-status {
+  flex: none;
+  font-size: 10px;
+  color: var(--ui-ink-faint);
+}
+.workflow-step.running > .anticon,
+.workflow-step.running .workflow-step-status {
+  color: var(--ui-accent);
+}
+.workflow-step.completed > .anticon {
+  color: var(--ui-success);
+}
+.workflow-step.skipped .workflow-step-status,
+.workflow-step.retrying .workflow-step-status {
+  color: var(--ui-warning);
+}
+.workflow-step.failed .workflow-step-status,
+.workflow-step.failed .workflow-step-mark {
+  color: var(--ui-danger);
+}
+.generation-mode-badge {
+  white-space: nowrap;
+}
 
-.generation-task-status { flex: none; margin: 6px 16px; display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #edf4ff; color: #24539a; font-size: 12px; }
+.generation-task-status {
+  flex: none;
+  margin: 8px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 12px;
+}
 .chat-page {
   display: flex;
   flex-direction: column;
@@ -1158,7 +1370,7 @@ onBeforeUnmount(() => {
   background: var(--ui-shell);
 }
 
-/* 顶部工作台状态条 (Stratum 级工程三段式) */
+/* 顶部工作台状态条 */
 .chat-topbar {
   display: flex;
   align-items: center;
@@ -1175,7 +1387,7 @@ onBeforeUnmount(() => {
 .topbar-section {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .section-left {
@@ -1194,7 +1406,10 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius-sm);
   cursor: pointer;
-  transition: all 140ms ease;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 
 .collapse-toggle-btn:hover {
@@ -1221,54 +1436,14 @@ onBeforeUnmount(() => {
 }
 
 .type-badge {
-  padding: 2px 7px;
+  padding: 4px 8px;
   font-size: 11px;
   font-weight: 500;
   color: var(--ui-accent);
   background: var(--ui-accent-soft);
   border: 1px solid var(--ui-accent-border);
   border-radius: 4px;
-  font-family: var(--ui-mono);
-}
-
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-weight: 500;
-}
-
-.status-indicator.live {
-  color: #2563eb;
-  background: #eff6ff;
-}
-
-.pulse-point {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #2563eb;
-  animation: pulse-glow 1.5s infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.8); }
-}
-
-.status-indicator.deployed {
-  color: #059669;
-  background: #ecfdf5;
-}
-
-.solid-point {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #059669;
+  font-family: inherit;
 }
 
 /* 视口与模式切换器 (Center) */
@@ -1276,7 +1451,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
@@ -1284,7 +1459,7 @@ onBeforeUnmount(() => {
 .segmented-control {
   display: inline-flex;
   align-items: center;
-  padding: 2px;
+  padding: 4px;
   background: var(--ui-surface-muted);
   border: 1px solid var(--ui-line);
   border-radius: 6px;
@@ -1294,9 +1469,9 @@ onBeforeUnmount(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 26px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 500;
   color: var(--ui-ink-soft);
@@ -1304,7 +1479,10 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .segmented-btn.active {
@@ -1327,7 +1505,10 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .segmented-icon-btn.active {
@@ -1363,7 +1544,10 @@ onBeforeUnmount(() => {
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .ghost-icon-btn:hover:not(:disabled) {
@@ -1381,7 +1565,7 @@ onBeforeUnmount(() => {
   width: 1px;
   height: 18px;
   background: var(--ui-line);
-  margin: 0 2px;
+  margin: 0 4px;
 }
 
 .action-btn-group {
@@ -1393,9 +1577,9 @@ onBeforeUnmount(() => {
 .ghost-text-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 500;
   color: var(--ui-ink-soft);
@@ -1403,7 +1587,10 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius-sm);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .ghost-text-btn:hover:not(:disabled) {
@@ -1418,20 +1605,24 @@ onBeforeUnmount(() => {
 }
 
 .primary-action-btn {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 28px;
   padding: 0 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--ui-on-danger);
   background: var(--ui-accent);
   border: 0;
   border-radius: var(--ui-radius-sm);
   cursor: pointer;
-  transition: all 120ms ease;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+  box-shadow: 0 1px 2px var(--ui-accent-border);
 }
 
 .primary-action-btn:hover:not(:disabled) {
@@ -1507,8 +1698,8 @@ onBeforeUnmount(() => {
 
 .message-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .message-row.user {
@@ -1524,14 +1715,14 @@ onBeforeUnmount(() => {
   height: 26px;
   font-size: 11px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--ui-on-danger);
   background: var(--ui-accent);
   border-radius: 6px;
 }
 
 .message-bubble {
   max-width: 86%;
-  padding: 10px 14px;
+  padding: 8px 16px;
   color: var(--ui-ink);
   line-height: 1.6;
   font-size: 13.5px;
@@ -1543,21 +1734,21 @@ onBeforeUnmount(() => {
 }
 
 .message-row.user .message-bubble {
-  color: #1e3a8a;
+  color: var(--ui-ink);
   background: var(--ui-accent-soft);
   border-color: var(--ui-accent-border);
 }
 
 .message-bubble.is-error {
-  border-color: #fecaca;
-  background: #fff5f5;
+  border-color: var(--ui-danger-soft);
+  background: var(--ui-danger-soft);
 }
 
 /* 异常恢复卡片 */
 .error-recovery-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .error-card-header {
@@ -1567,24 +1758,24 @@ onBeforeUnmount(() => {
 }
 
 .error-badge {
-  padding: 1px 6px;
+  padding: 4px 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #dc2626;
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--ui-danger-fill);
+  background: var(--ui-danger-soft);
   border-radius: 3px;
 }
 
 .error-title {
   font-size: 13px;
   font-weight: 600;
-  color: #991b1b;
+  color: var(--ui-danger);
 }
 
 .error-card-desc {
   margin: 0;
   font-size: 12px;
-  color: #7f1d1d;
+  color: var(--ui-danger);
   line-height: 1.5;
 }
 
@@ -1592,26 +1783,29 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .error-retry-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   font-size: 11.5px;
   font-weight: 500;
-  color: #ffffff;
-  background: #dc2626;
+  color: var(--ui-on-danger);
+  background: var(--ui-danger-fill);
   border: 0;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .error-retry-btn:hover:not(:disabled) {
-  background: #b91c1c;
+  background: var(--ui-danger-fill-hover);
 }
 
 .error-retry-btn:disabled {
@@ -1622,145 +1816,42 @@ onBeforeUnmount(() => {
 .error-edit-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   font-size: 11.5px;
   font-weight: 500;
-  color: #991b1b;
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+  border: 1px solid var(--ui-danger);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .error-edit-btn:hover {
-  background: #fecaca;
-}
-
-/* Tortuga 级流式构建流水线 */
-.tortuga-pipeline {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 2px;
-  min-width: 260px;
-}
-
-.pipeline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ui-line);
-}
-
-.pipeline-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.live-dot-pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 9999px;
-  background: #2563eb;
-  animation: pulse-glow 1.5s infinite;
-}
-
-.pipeline-tag {
-  font-family: var(--ui-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--ui-accent);
-}
-
-.pipeline-hint {
-  font-size: 11px;
-  color: var(--ui-ink-soft);
+  background: var(--ui-danger-soft);
 }
 
 .stop-gen-btn {
-  padding: 1px 7px;
+  padding: 4px 8px;
   font-size: 11px;
-  color: #dc2626;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--ui-danger-fill);
+  background: var(--ui-danger-soft);
+  border: 1px solid var(--ui-danger);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .stop-gen-btn:hover {
-  background: #dc2626;
-  color: #ffffff;
-}
-
-.pipeline-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.step-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.step-indicator {
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  font-size: 11px;
-  flex: none;
-  margin-top: 1px;
-}
-
-.step-item.completed .step-indicator {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
-}
-
-.step-item.active .step-indicator {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-}
-
-.step-item.pending .step-indicator {
-  background: var(--ui-surface-muted);
-  border: 1px solid var(--ui-line);
-}
-
-.pending-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background: var(--ui-ink-faint);
-}
-
-.step-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.step-name {
-  font-weight: 500;
-  color: var(--ui-ink);
-}
-
-.step-meta {
-  font-size: 11px;
-  color: var(--ui-ink-faint);
+  background: var(--ui-danger-fill);
+  color: var(--ui-on-danger);
 }
 
 /* 流式传输遥测状态条 */
@@ -1778,17 +1869,9 @@ onBeforeUnmount(() => {
 .telemetry-info {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--ui-mono);
-  font-size: 10.5px;
-}
-
-.telemetry-pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #2563eb;
-  animation: pulse-glow 1.5s infinite;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 12px;
 }
 
 .telemetry-label {
@@ -1801,19 +1884,22 @@ onBeforeUnmount(() => {
 }
 
 .stop-stream-btn {
-  padding: 1px 6px;
+  padding: 4px 8px;
   font-size: 10.5px;
-  color: #dc2626;
+  color: var(--ui-danger-fill);
   background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid var(--ui-danger);
   border-radius: 3px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .stop-stream-btn:hover {
-  background: #dc2626;
-  color: #ffffff;
+  background: var(--ui-danger-fill);
+  color: var(--ui-on-danger);
 }
 
 /* 拖拽中缝 */
@@ -1845,7 +1931,7 @@ onBeforeUnmount(() => {
 }
 
 .splitter-bar:focus-visible {
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 0 0 2px var(--ui-accent-border);
 }
 
 .splitter-handle {
@@ -1855,7 +1941,7 @@ onBeforeUnmount(() => {
   transform: translate(-50%, -50%);
   width: 3px;
   height: 24px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--ui-line-strong);
   border-radius: 2px;
 }
 
@@ -1894,7 +1980,10 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    color 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .viewport-wrapper.mode-desktop {
@@ -1915,26 +2004,29 @@ onBeforeUnmount(() => {
   max-height: 92%;
 }
 
-.device-frame {
+.preview-surface {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--ui-preview-paper);
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius);
   box-shadow: var(--ui-shadow-md);
-  transition: all 200ms ease;
+  transition:
+    color 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease;
 }
 
-.viewport-wrapper.mode-mobile .device-frame {
+.viewport-wrapper.mode-mobile .preview-surface {
   border-radius: 24px;
-  border: 3px solid #334155;
+  border: 3px solid var(--ui-line-strong);
   box-shadow: var(--ui-shadow-xl);
 }
 
-.viewport-wrapper.mode-tablet .device-frame {
+.viewport-wrapper.mode-tablet .preview-surface {
   border-radius: 16px;
-  border: 2px solid #64748b;
+  border: 2px solid var(--ui-line-strong);
   box-shadow: var(--ui-shadow-lg);
 }
 
@@ -1942,7 +2034,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #ffffff;
+  background: var(--ui-preview-paper);
 }
 
 .preview-empty {
@@ -1968,7 +2060,7 @@ onBeforeUnmount(() => {
 }
 
 .empty-title {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 16px;
   font-weight: 600;
   color: var(--ui-ink);
@@ -1982,16 +2074,16 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
-/* 高阶代码查看器 (Monospace + 行号) */
+/* 代码查看器与行号 */
 .code-viewer-wrapper {
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: #0d1117;
+  background: var(--ui-code-bg);
   border-radius: var(--ui-radius);
   overflow: hidden;
-  border: 1px solid #30363d;
+  border: 1px solid var(--ui-code-line);
   box-shadow: var(--ui-shadow-md);
 }
 
@@ -2000,8 +2092,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #161b22;
-  border-bottom: 1px solid #30363d;
+  background: var(--ui-code-toolbar);
+  border-bottom: 1px solid var(--ui-code-line);
 }
 
 .code-file-label {
@@ -2010,7 +2102,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   font-family: var(--ui-mono);
   font-size: 12px;
-  color: #e6edf3;
+  color: var(--ui-code-ink);
 }
 
 .file-name {
@@ -2019,29 +2111,33 @@ onBeforeUnmount(() => {
 
 .file-lines {
   font-size: 11px;
-  color: #8b949e;
-  background: #21262d;
-  padding: 1px 6px;
+  color: var(--ui-code-muted);
+  background: var(--ui-code-hover);
+  padding: 4px 8px;
   border-radius: 4px;
 }
 
 .copy-code-btn {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   font-size: 11px;
-  color: #c9d1d9;
-  background: #21262d;
-  border: 1px solid #30363d;
+  color: var(--ui-code-ink);
+  background: var(--ui-code-hover);
+  border: 1px solid var(--ui-code-line);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 
 .copy-code-btn:hover {
-  background: #30363d;
-  color: #ffffff;
+  background: var(--ui-code-line);
+  color: var(--ui-on-danger);
 }
 
 .code-content-area {
@@ -2050,22 +2146,22 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   padding: 0;
-  background: #0d1117;
+  background: var(--ui-code-bg);
 }
 
 .code-line-numbers {
   display: flex;
   flex-direction: column;
   flex: none;
-  padding: 16px 10px 16px 14px;
-  background: #090d13;
-  border-right: 1px solid #21262d;
+  padding: 16px 8px 16px 16px;
+  background: var(--ui-code-gutter);
+  border-right: 1px solid var(--ui-code-hover);
   user-select: none;
   text-align: right;
   font-family: var(--ui-mono);
   font-size: 12px;
   line-height: 1.6;
-  color: #484f58;
+  color: var(--ui-code-muted);
 }
 
 .code-pre-wrap {
@@ -2102,7 +2198,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .detail-item {
@@ -2129,7 +2225,7 @@ onBeforeUnmount(() => {
 }
 
 /* 响应式断点 */
-@media (max-width: 960px) {
+@media (max-width: 959px) {
   .chat-topbar {
     height: auto;
     padding: 8px 12px;
@@ -2157,7 +2253,7 @@ onBeforeUnmount(() => {
     flex: 0 0 100%;
     width: 100%;
     justify-content: flex-start;
-    margin-top: 6px;
+    margin-top: 8px;
   }
 
   .section-right {
@@ -2188,6 +2284,325 @@ onBeforeUnmount(() => {
   .preview-panel {
     height: 50%;
     min-height: 400px;
+  }
+}
+</style>
+
+<style scoped>
+.chat-topbar {
+  height: 56px;
+  padding: 0 20px;
+  gap: 16px;
+}
+.section-left {
+  flex: 1;
+  overflow: hidden;
+}
+.app-brand-info {
+  flex: 1;
+  min-width: 0;
+}
+.app-name {
+  max-width: 400px;
+  margin: 0;
+  font-size: 15px;
+}
+.back-to-apps {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--ui-ink-soft);
+  border-radius: 6px;
+}
+.back-to-apps:hover {
+  background: var(--ui-surface-muted);
+}
+.type-badge {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ui-ink-faint);
+  background: var(--ui-surface-muted);
+  border: 0;
+  padding: 4px 8px;
+}
+.ghost-text-btn,
+.primary-action-btn {
+  white-space: nowrap;
+  height: 36px;
+  font-size: 13px;
+}
+.primary-action-btn {
+  white-space: nowrap;
+  color: var(--ui-on-accent);
+  padding: 0 16px;
+  box-shadow: none;
+}
+.more-actions {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  border: 1px solid var(--ui-line);
+}
+.chat-panel {
+  min-width: 340px;
+  border-right: 0;
+}
+.panel-header {
+  height: 48px;
+  padding: 0 20px;
+}
+.header-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.meta-tag {
+  font-size: 12px;
+}
+.messages {
+  padding: 24px 20px;
+}
+.message-row {
+  margin-bottom: 24px;
+}
+.message-bubble {
+  min-width: 0;
+  max-width: calc(100% - 38px);
+  font-size: 14px;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+.message-row.ai .message-bubble {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  flex: 1;
+  white-space: normal;
+}
+.message-row.user .message-bubble {
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  border: 0;
+  padding: 16px 16px;
+  border-radius: 12px 12px 2px 12px;
+}
+.message-row.ai .message-bubble.is-error {
+  padding: 16px;
+  background: var(--ui-danger-soft);
+}
+.ai-avatar-icon {
+  margin-top: 4px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.error-title,
+.error-card-desc,
+.error-badge {
+  color: var(--ui-danger);
+}
+.error-edit-btn {
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
+}
+.error-card-header,
+.error-card-actions {
+  flex-wrap: wrap;
+}
+.generation-task-status {
+  margin: 0;
+  padding: 8px 20px;
+  border-radius: 0;
+  background: var(--ui-accent-soft);
+  color: var(--ui-ink-soft);
+  border-bottom: 1px solid var(--ui-accent-border);
+}
+.generation-task-status .stop-stream-btn {
+  margin-left: auto;
+}
+.stop-stream-btn {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 4px 8px;
+  color: var(--ui-danger);
+}
+.splitter-bar {
+  width: 5px;
+  background: var(--ui-line-subtle);
+  border-left: 1px solid var(--ui-line);
+}
+.splitter-handle {
+  width: 2px;
+  background: var(--ui-line-strong);
+}
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 48px;
+  padding: 0 16px;
+  flex: none;
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-line);
+}
+.preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.segmented-control {
+  border: 0;
+  padding: 4px;
+}
+.segmented-btn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.segmented-icon-btn,
+.canvas-action-group .ghost-icon-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.sandbox-stage {
+  padding: 12px;
+  background: var(--ui-surface-muted);
+}
+.preview-surface {
+  box-shadow: none;
+  border-radius: 6px;
+}
+.viewport-wrapper.mode-mobile .preview-surface,
+.viewport-wrapper.mode-tablet .preview-surface {
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.viewport-wrapper {
+  transition: none;
+}
+.code-viewer-wrapper {
+  border-radius: 6px;
+  box-shadow: none;
+}
+.code-line-numbers {
+  font-size: 13px;
+  color: var(--ui-code-muted);
+}
+.empty-icon-wrap {
+  background: transparent;
+  color: var(--ui-ink-faint);
+}
+.empty-title {
+  font-size: 18px;
+}
+@media (max-width: 959px) {
+  .chat-topbar {
+    height: auto;
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .section-left {
+    flex: 1 1 100%;
+  }
+  .section-right {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .app-brand-info {
+    flex-wrap: nowrap;
+  }
+  .app-name {
+    flex: 1;
+    max-width: none;
+  }
+  .primary-action-btn,
+  .ghost-text-btn,
+  .more-actions,
+  .back-to-apps {
+    min-height: 40px;
+  }
+  .mobile-workspace-tabs {
+    display: flex;
+    flex: none;
+    gap: 4px;
+    padding: 0 12px;
+    background: var(--ui-surface);
+    border-bottom: 1px solid var(--ui-line);
+  }
+  .mobile-workspace-tabs button {
+  white-space: nowrap;
+    flex: 1;
+    min-height: 44px;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--ui-ink-soft);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .mobile-workspace-tabs button[aria-pressed='true'] {
+    color: var(--ui-accent);
+    border-bottom-color: var(--ui-accent);
+    font-weight: 600;
+  }
+  .workspace {
+    flex-direction: row;
+  }
+  .chat-panel,
+  .preview-panel {
+    height: 100%;
+    min-height: 0;
+    width: 100% !important;
+    min-width: 0;
+    border: 0;
+  }
+  .chat-panel.mobile-hidden,
+  .preview-panel.mobile-hidden {
+    display: none !important;
+  }
+  .splitter-bar {
+    display: none;
+  }
+  .preview-controls .mode-switcher {
+    display: none;
+  }
+  .preview-toolbar {
+    height: 44px;
+  }
+  .preview-controls {
+    gap: 8px;
+  }
+  .messages {
+    padding: 16px 16px;
+  }
+  .panel-header {
+    padding: 0 16px;
+    height: 40px;
+  }
+  .sandbox-stage {
+    padding: 8px;
+  }
+  .preview-empty {
+    padding: 20px;
+  }
+  .generation-task-status {
+    padding: 8px 12px;
+    max-height: 140px;
+    overflow: auto;
+  }
+}
+@media (min-width: 960px) and (max-width: 1150px) {
+  .viewport-switcher {
+    display: none;
   }
 }
 </style>

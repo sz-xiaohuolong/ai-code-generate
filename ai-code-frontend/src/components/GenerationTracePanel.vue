@@ -8,7 +8,7 @@ import {
   type TraceRoot, type TraceStep, type TraceView,
 } from '@/utils/generationTrace'
 
-const props = defineProps<{ appId?: string; taskId?: string; taskActive?: boolean; requestId?: string }>()
+const props = defineProps<{ appId?: string; taskId?: string; taskActive?: boolean; requestId?: string; embedded?: boolean }>()
 defineEmits<{ close: [] }>()
 type Locator = { kind: 'trace' | 'task' | 'request'; id: string }
 const records = ref<TraceRoot[]>([])
@@ -150,10 +150,11 @@ onBeforeUnmount(() => { disposed = true; stopTimer(); historyController?.abort()
 
 <template>
   <section class="trace-panel" aria-label="生成追踪记录">
-    <header class="trace-header">
+    <header v-if="!embedded" class="trace-header">
       <div><h2>{{ requestId ? '创建失败诊断' : '生成记录' }}</h2><p>保留 7 天 · 仅所有者可见 · 记录只用于查询</p></div>
       <button class="trace-button icon-button" type="button" aria-label="关闭生成记录" @click="$emit('close')"><CloseOutlined /></button>
     </header>
+    <p v-if="embedded" class="trace-secondary">记录保留 7 天，仅所有者可查询。</p>
     <div class="trace-layout" :class="{ 'with-history': appId }">
       <nav v-if="appId" class="trace-history" aria-label="应用追踪历史">
         <div class="trace-toolbar"><strong>近 7 天记录</strong><button class="trace-button" type="button" :disabled="historyBusy" @click="loadHistory()">刷新列表</button></div>

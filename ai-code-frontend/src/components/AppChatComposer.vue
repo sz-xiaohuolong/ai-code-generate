@@ -27,7 +27,9 @@ const selectedElementText = computed(() => {
   }
   const tag = props.selectedElement.tagName.toLowerCase()
   const id = props.selectedElement.id ? `#${props.selectedElement.id}` : ''
-  const cls = props.selectedElement.className ? `.${props.selectedElement.className.split(' ')[0]}` : ''
+  const cls = props.selectedElement.className
+    ? `.${props.selectedElement.className.split(' ')[0]}`
+    : ''
   return `<${tag}${id || cls}>`
 })
 
@@ -78,7 +80,9 @@ const submit = () => {
         <AimOutlined class="pill-icon" />
         <span class="pill-label">目标元素：</span>
         <code class="pill-tag">{{ selectedElementText }}</code>
-        <span v-if="selectedElement.text" class="pill-preview">"{{ selectedElement.text.slice(0, 24) }}"</span>
+        <span v-if="selectedElement.text" class="pill-preview"
+          >"{{ selectedElement.text.slice(0, 24) }}"</span
+        >
       </div>
       <button
         type="button"
@@ -95,12 +99,17 @@ const submit = () => {
       <a-textarea
         v-model:value="inputMessage"
         aria-label="向 AI 描述修改或新需求"
-        placeholder="向 AI 描述修改或新需求（例如：将顶部导航背景改为透明，调整卡片边距）..."
+        placeholder="描述你想调整的地方…"
         :rows="3"
         :maxlength="1000"
         @press-enter.ctrl="submit"
+        @press-enter.meta="submit"
       />
-      <KnowledgeToggle :model-value="!!useKnowledge" :disabled="generating" @update:model-value="emit('update:useKnowledge', $event)" />
+      <KnowledgeToggle
+        :model-value="!!useKnowledge"
+        :disabled="generating"
+        @update:model-value="emit('update:useKnowledge', $event)"
+      />
       <div class="composer-actions">
         <div class="actions-left">
           <a-button
@@ -113,13 +122,13 @@ const submit = () => {
             <EditOutlined />
             <span>{{ editMode ? '完成选择' : '点选修改元素' }}</span>
           </a-button>
-          <span class="shortcut-tip">Ctrl + Enter 发送</span>
+          <span class="shortcut-tip">⌘ / Ctrl ↵ 发送</span>
         </div>
         <div class="actions-right">
           <a-tooltip title="发送消息">
             <a-button
               type="primary"
-              shape="circle"
+              shape="default"
               size="middle"
               :loading="generating"
               :disabled="!inputMessage.trim()"
@@ -127,7 +136,7 @@ const submit = () => {
               aria-label="发送消息"
               @click="submit"
             >
-              <ArrowUpOutlined />
+              <span v-if="!generating">发送</span><ArrowUpOutlined v-if="!generating" />
             </a-button>
           </a-tooltip>
         </div>
@@ -140,7 +149,7 @@ const submit = () => {
 .composer {
   display: flex;
   flex-direction: column;
-  padding: 12px 16px 14px;
+  padding: 12px 16px 16px;
   background: var(--ui-surface);
   border-top: 1px solid var(--ui-line);
 }
@@ -150,12 +159,12 @@ const submit = () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 8px;
   margin-bottom: 8px;
   font-size: 11.5px;
-  color: #1e40af;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  border: 1px solid var(--ui-accent-border);
   border-radius: var(--ui-radius-sm);
   animation: fadeIn 150ms ease;
 }
@@ -163,35 +172,41 @@ const submit = () => {
 .guide-content {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .guide-icon {
   font-size: 13px;
-  color: #2563eb;
+  color: var(--ui-accent);
 }
 
 .guide-close-btn {
   flex: none;
-  padding: 1px 6px;
+  padding: 4px 8px;
   font-size: 11px;
-  color: #1e40af;
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid #bfdbfe;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  border: 1px solid var(--ui-accent-border);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
 
 .guide-close-btn:hover {
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--ui-accent);
+  color: var(--ui-on-accent);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-3px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .selected-pill {
@@ -199,7 +214,7 @@ const submit = () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   margin-bottom: 8px;
   font-size: 12px;
   background: var(--ui-accent-soft);
@@ -210,7 +225,7 @@ const submit = () => {
 .pill-info {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   overflow: hidden;
 }
@@ -225,11 +240,11 @@ const submit = () => {
 }
 
 .pill-tag {
-  padding: 1px 5px;
-  font-family: var(--ui-mono);
+  padding: 4px 4px;
+  font-family: inherit;
   font-size: 11px;
   color: var(--ui-accent);
-  background: rgba(37, 99, 235, 0.1);
+  background: var(--ui-accent-soft);
   border-radius: 4px;
 }
 
@@ -254,7 +269,7 @@ const submit = () => {
   border: 0;
   border-radius: 9999px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
 
 .pill-close-btn::after {
@@ -265,28 +280,28 @@ const submit = () => {
 
 .pill-close-btn:hover {
   color: var(--ui-ink);
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface-hover);
 }
 
 .input-container {
   display: flex;
   flex-direction: column;
-  padding: 8px 10px 8px;
+  padding: 8px 8px 8px;
   background: var(--ui-surface-muted);
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius);
-  transition: all 160ms ease;
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
 .input-container:focus-within {
   background: var(--ui-surface);
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px var(--ui-accent-soft);
 }
 
 .input-container :deep(.ant-input) {
   min-height: 64px;
-  padding: 2px 4px;
+  padding: 4px 4px;
   font-size: 14px;
   line-height: 1.6;
   color: var(--ui-ink);
@@ -300,15 +315,15 @@ const submit = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-line);
 }
 
 .actions-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mode-btn {
@@ -337,5 +352,68 @@ const submit = () => {
   position: absolute;
   content: '';
   inset: -6px;
+}
+</style>
+
+<style scoped>
+.composer {
+  padding: 12px 16px 16px;
+  border-top: 0;
+}
+.input-container {
+  padding: 12px;
+  background: var(--ui-surface);
+  border-color: var(--ui-line-strong);
+  border-radius: 12px;
+}
+.input-container :deep(.ant-input) {
+  font-size: 14px;
+  min-height: 66px;
+}
+.composer-actions {
+  border-top-color: var(--ui-line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.actions-left {
+  min-width: 0;
+  gap: 8px;
+}
+.mode-btn {
+  font-size: 12px;
+  height: 34px;
+}
+.send-btn {
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.send-btn::after {
+  display: none;
+}
+.shortcut-tip {
+  display: none;
+}
+.edit-guide-banner {
+  font-size: 12px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-accent-border);
+}
+.guide-icon,
+.guide-close-btn {
+  color: var(--ui-accent);
+}
+@media (max-width: 959px) {
+  .composer {
+    padding: 8px 12px 12px;
+  }
+  .mode-btn,
+  .send-btn {
+    height: 40px;
+  }
 }
 </style>

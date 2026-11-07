@@ -1,0 +1,392 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Cobalt / Ink（按已批准方案适配）
+ * 导航：原有顶栏与管理页签；核心对象：创作输入、双栏预览、数据记录。
+ * 状态：加载、空、错误、完整；字体：中文系统无衬线；表面：平面与细线。
+ * 颜色由 App.vue 同步给 CSS 与 Ant Design Vue；原始主题 scaffold 保留在本轮证据目录。
+ * 适配：管理员主动作沿用蓝色，删除与错误保留红色；不复制主题营销页构图。
+ */
+/* Hallmark · finish-review: subagent · 1 项产品问题已解决，截图证据已重拍 · gap: none */
+/* critique: 以输入、预览和数据记录构成层级；去掉营销装饰，保留可追溯的真实数据。 */
+:root {
+  --ui-preview-paper: #ffffff;
+  --ui-code-bg: #101722;
+  --ui-code-toolbar: #1a2331;
+  --ui-code-gutter: #131c28;
+  --ui-code-line: #344050;
+  --ui-code-ink: #e6edf3;
+  --ui-code-muted: #a8b8cb;
+  --ui-code-hover: #2a3546;
+  --ui-on-danger: #ffffff;
+  --ui-danger-fill: #b52c3a;
+  --ui-danger-fill-hover: #942532;
+}
+
+body .ant-btn {
+  transition:
+    color 160ms,
+    background-color 160ms,
+    border-color 160ms;
+  box-shadow: none;
+}
+body .ant-btn-primary {
+  color: var(--ui-on-accent);
+  background: var(--ui-accent);
+  box-shadow: none;
+}
+body .ant-btn-primary:not(:disabled):hover {
+  color: var(--ui-on-accent);
+  background: var(--ui-accent-hover);
+  transform: none;
+  box-shadow: none;
+}
+body .ant-btn:not(:disabled):active {
+  transform: none;
+}
+body .ant-btn-dangerous.ant-btn-link {
+  color: var(--ui-danger);
+}
+body .ant-input,
+body .ant-input-affix-wrapper,
+body .ant-input-number,
+body .ant-select-selector {
+  background-color: var(--ui-surface);
+}
+body .ant-btn-default:disabled,
+body .ant-btn-primary:disabled {
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink-faint);
+  border-color: var(--ui-line);
+}
+body .ant-form-item-label > label {
+  font-size: 13px !important;
+  font-weight: 500;
+}
+body .ant-btn:focus-visible,
+body a:focus-visible,
+body button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+
+.admin-page .user-manage-page,
+.admin-page .app-manage-page,
+.admin-page .chat-history-manage-page {
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-page .search-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 0 24px;
+  border: 0;
+}
+.admin-page .search-form .ant-form-item {
+  width: 180px;
+  margin: 0;
+}
+.admin-page .search-form .ant-form-item-label {
+  padding-bottom: 8px;
+}
+.admin-page .search-form .search-actions {
+  width: auto;
+}
+.admin-page .search-form .ant-input-number,
+.admin-page .search-form .ant-select {
+  width: 100%;
+}
+.admin-page .search-form .ant-btn {
+  height: 36px;
+}
+.admin-page .ant-table-wrapper {
+  overflow: visible;
+}
+.admin-page .ant-table-wrapper .ant-table {
+  border-radius: 0;
+  background: var(--ui-surface);
+}
+.admin-page .ant-table-wrapper .ant-table-thead > tr > th {
+  padding: 16px 16px;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface);
+  border-bottom: 2px solid var(--ui-line-strong);
+  font-size: 12px;
+  font-weight: 500;
+}
+.admin-page .ant-table-wrapper .ant-table-thead > tr > th::before {
+  display: none;
+}
+.admin-page .ant-table-wrapper .ant-table-tbody > tr > td {
+  padding: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  border-bottom: 1px solid var(--ui-line);
+}
+.admin-page .ant-table-wrapper .ant-table-thead > tr > th:first-child,
+.admin-page .ant-table-wrapper .ant-table-tbody > tr > td:first-child {
+  padding-left: 0;
+}
+.admin-page .ant-table-wrapper .ant-table-thead > tr > th:last-child,
+.admin-page .ant-table-wrapper .ant-table-tbody > tr > td:last-child {
+  padding-right: 0;
+}
+.admin-page .ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin: 24px 0;
+}
+.admin-page .ant-table-cell .ant-btn-link {
+  padding: 0 8px;
+  min-height: 36px;
+  font-size: 13px;
+}
+.record-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.record-identity > .ant-avatar,
+.record-identity > .record-cover {
+  flex: none;
+}
+.record-identity-text {
+  min-width: 0;
+}
+.record-user-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.record-account {
+  color: var(--ui-ink-faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-name {
+  display: block;
+  color: var(--ui-ink);
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-secondary {
+  display: block;
+  margin-top: 4px;
+  color: var(--ui-ink-faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-id {
+  font-family: var(--ui-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+.record-time {
+  font-size: 12px;
+  color: var(--ui-ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.record-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  color: var(--ui-ink-soft);
+  background: var(--ui-surface-muted);
+  border-radius: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.record-status.is-accent {
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+}
+.record-status.is-success {
+  color: var(--ui-success);
+  background: var(--ui-success-soft);
+}
+.record-status.is-danger {
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+}
+.record-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 42px;
+  color: var(--ui-ink-faint);
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 10px;
+}
+.record-cover .ant-image {
+  flex: none;
+}
+.record-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.record-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+button.record-excerpt {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+button.record-excerpt:hover {
+  color: var(--ui-accent);
+}
+.record-detail {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: var(--ui-ink);
+  line-height: 1.8;
+}
+.record-detail-meta {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+  color: var(--ui-ink-faint);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.admin-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 16px;
+  margin: 0 0 20px;
+  background: var(--ui-danger-soft);
+  border-radius: 8px;
+  color: var(--ui-danger);
+}
+.admin-inline-error p {
+  margin: 0;
+}
+.admin-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--ui-ink-soft);
+}
+.admin-empty p {
+  margin: 0 0 16px;
+}
+.admin-loading {
+  padding: 32px 16px;
+  border-top: 2px solid var(--ui-line-strong);
+}
+
+.trace-drawer .ant-drawer-body {
+  padding: 0;
+}
+.trace-drawer .trace-panel {
+  border: 0;
+  max-height: none;
+  padding: 20px;
+}
+.trace-drawer .trace-header {
+  align-items: flex-start;
+}
+.trace-drawer .trace-layout.with-history {
+  grid-template-columns: 1fr;
+}
+.trace-drawer .trace-history {
+  border: 0;
+  border-bottom: 1px solid var(--ui-line);
+  padding: 0 0 20px;
+}
+.trace-drawer .trace-records {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.trace-drawer .trace-detail {
+  overflow: visible;
+}
+.trace-drawer .trace-header h2 {
+  font-size: 20px;
+}
+.trace-drawer .trace-button {
+  min-height: 36px;
+}
+.trace-drawer .trace-notice {
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+}
+
+@media (max-width: 640px) {
+  .admin-page .search-form {
+    gap: 16px 12px;
+  }
+  .admin-page .search-form .ant-form-item {
+    width: calc(50% - 6px);
+    min-width: 0;
+  }
+  .admin-page .search-form .search-actions {
+    width: 100%;
+  }
+  .admin-page .search-form .ant-input,
+  .admin-page .search-form .ant-input-affix-wrapper,
+  .admin-page .search-form .ant-select-selector,
+  .admin-page .search-form .ant-input-number,
+  .admin-page .search-form .ant-btn {
+    min-height: 40px;
+  }
+  .admin-page .search-form .ant-input-affix-wrapper .ant-input {
+    min-height: 0;
+  }
+  .admin-inline-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .admin-page .ant-pagination {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+html,
+body {
+  overflow-x: clip;
+}

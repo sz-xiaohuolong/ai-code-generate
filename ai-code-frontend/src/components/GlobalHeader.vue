@@ -2,18 +2,17 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { DownOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import {
+  DownOutlined,
+  LoginOutlined,
+  LogoutOutlined,
+  MenuOutlined,
+  SettingOutlined,
+} from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { userLogout } from '@/api/userController'
 import { useLoginUserStore } from '@/stores/loginUser'
 import { getUserAvatar } from '@/constants/user'
-import { useGenerationModeStore } from '@/stores/generationMode'
-
-const generationModeStore = useGenerationModeStore()
-const generationModeOptions = [
-  { label: '标准模式', value: 'standard' },
-  { label: '工作流模式', value: 'workflow' },
-]
 
 const router = useRouter()
 const loginUserStore = useLoginUserStore()
@@ -23,15 +22,15 @@ const menuItems = computed(() => {
   const items = [{ path: '/', title: '首页' }]
   if (isLogin.value) items.push({ path: '/knowledge', title: '知识库' })
   if (loginUser.value.userRole === 'admin') {
-    items.push({ path: '/admin/userManage', title: '用户管理' })
-    items.push({ path: '/admin/appManage', title: '应用管理' })
-    items.push({ path: '/admin/chatHistoryManage', title: '对话管理' })
+    items.push({ path: '/admin/userManage', title: '平台管理' })
   }
   items.push({ path: '/about', title: '关于' })
   return items
 })
 
-const displayName = computed(() => loginUser.value.userName || loginUser.value.userAccount || '用户')
+const displayName = computed(
+  () => loginUser.value.userName || loginUser.value.userAccount || '用户',
+)
 
 const handleLogout = async () => {
   try {
@@ -52,9 +51,9 @@ const handleLogout = async () => {
 
 <template>
   <header class="global-header">
-    <RouterLink class="brand-link" to="/" aria-label="返回 AI 代码生成平台工作台">
+    <RouterLink class="brand-link" to="/" aria-label="返回 AI 代码生成平台首页">
       <img src="@/assets/logo.svg" alt="" class="logo" />
-      <span class="brand-name">AI代码生成平台</span>
+      <span class="brand-name">AI 代码生成平台</span>
     </RouterLink>
 
     <nav class="primary-nav" aria-label="主导航">
@@ -63,23 +62,17 @@ const handleLogout = async () => {
         :key="item.path"
         :to="item.path"
         class="nav-link"
-        :class="{ active: $route.path === item.path }"
+        :class="{
+          active:
+            $route.path === item.path ||
+            (item.path.startsWith('/admin/') && $route.path.startsWith('/admin/')),
+        }"
       >
         {{ item.title }}
       </RouterLink>
     </nav>
 
     <div class="header-right">
-      <div class="new-app-mode">
-        <span class="mode-label">新建默认模式</span>
-        <a-segmented
-          :value="generationModeStore.defaultMode"
-          :options="generationModeOptions"
-          size="small"
-          aria-label="新建应用默认模式，仅影响新建应用"
-          @change="generationModeStore.setDefaultMode"
-        />
-      </div>
       <a-dropdown class="mobile-navigation" :trigger="['click']" placement="bottomRight">
         <a-button aria-label="打开导航菜单"><MenuOutlined /></a-button>
         <template #overlay>
@@ -123,15 +116,15 @@ const handleLogout = async () => {
   height: 58px;
   max-width: 1760px;
   margin: 0 auto;
-  padding: 0 30px;
-  gap: 34px;
+  padding: 0 32px;
+  gap: 32px;
 }
 
 .brand-link {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--ui-ink);
   white-space: nowrap;
 }
@@ -156,7 +149,7 @@ const handleLogout = async () => {
   min-width: 0;
   height: 100%;
   align-items: stretch;
-  gap: 3px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -170,7 +163,7 @@ const handleLogout = async () => {
   display: inline-flex;
   flex: none;
   align-items: center;
-  padding: 0 13px;
+  padding: 0 12px;
   color: var(--ui-ink-soft);
   font-size: 13px;
   font-weight: 500;
@@ -221,9 +214,9 @@ const handleLogout = async () => {
 .user-entry {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-height: 36px;
-  padding: 3px 6px;
+  padding: 4px 8px;
   color: var(--ui-ink);
   background: transparent;
   border: 0;
@@ -251,7 +244,7 @@ const handleLogout = async () => {
 
 @media (max-width: 760px) {
   .global-header {
-    padding: 0 14px;
+    padding: 0 16px;
     gap: 12px;
   }
 
@@ -278,6 +271,42 @@ const handleLogout = async () => {
   .user-name,
   .dropdown-arrow {
     display: none;
+  }
+}
+</style>
+
+<style scoped>
+.global-header {
+  height: 64px;
+  padding: 0 32px;
+  gap: 40px;
+}
+.brand-name {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+.nav-link {
+  font-size: 14px;
+}
+.user-entry {
+  min-height: 40px;
+}
+@media (max-width: 760px) {
+  .global-header {
+    height: 58px;
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .brand-name {
+    display: inline;
+    font-size: 14px;
+  }
+  .header-right {
+    gap: 4px;
+  }
+  .mobile-navigation {
+    min-width: 40px;
+    height: 40px;
   }
 }
 </style>

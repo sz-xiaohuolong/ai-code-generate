@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useLoginUserStore } from '@/stores/loginUser'
 import { ArrowUpOutlined } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -10,9 +12,18 @@ import GenerationTracePanel from '@/components/GenerationTracePanel.vue'
 import { isAxiosError } from 'axios'
 import { addApp, listFeaturedAppVoByPage, listMyAppVoByPage } from '@/api/appController'
 import { useGenerationModeStore } from '@/stores/generationMode'
-import { GENERATION_MODE_LABELS } from '@/utils/workflowProgress'
 
 const generationModeStore = useGenerationModeStore()
+const { isLogin, loginUser } = storeToRefs(useLoginUserStore())
+const generationModeOptions = [
+  { label: '标准模式', value: 'standard' },
+  { label: '工作流模式', value: 'workflow' },
+]
+const myError = ref('')
+const featuredError = ref('')
+const promptInput = ref<{ focus: () => void } | null>(null)
+let myRequest = 0
+let featuredRequest = 0
 
 const router = useRouter()
 const prompt = ref('')
@@ -69,29 +80,51 @@ const promptSamples = [
 ]
 
 const loadMyApps = async () => {
+  if (!isLogin.value) return
+  const request = ++myRequest
   myLoading.value = true
+  myError.value = ''
   try {
     const res = await listMyAppVoByPage({ ...mySearch })
-    if (res.data.code === 0 && res.data.data) {
-      myApps.value = res.data.data.records || []
-      myTotal.value = res.data.data.totalRow || 0
-    }
+    if (request !== myRequest) return
+    if (res.data.code !== 0 || !res.data.data) throw new Error('列表不可用')
+    myApps.value = res.data.data.records || []
+    myTotal.value = res.data.data.totalRow || 0
+  } catch {
+    if (request === myRequest) myError.value = '作品暂时无法加载，请重试。'
   } finally {
-    myLoading.value = false
+    if (request === myRequest) myLoading.value = false
   }
 }
 
 const loadFeaturedApps = async () => {
+  const request = ++featuredRequest
   featuredLoading.value = true
+  featuredError.value = ''
   try {
     const res = await listFeaturedAppVoByPage({ ...featuredSearch })
-    if (res.data.code === 0 && res.data.data) {
-      featuredApps.value = res.data.data.records || []
-      featuredTotal.value = res.data.data.totalRow || 0
-    }
+    if (request !== featuredRequest) return
+    if (res.data.code !== 0 || !res.data.data) throw new Error('列表不可用')
+    featuredApps.value = res.data.data.records || []
+    featuredTotal.value = res.data.data.totalRow || 0
+  } catch {
+    if (request === featuredRequest) featuredError.value = '精选案例暂时无法加载，请重试。'
   } finally {
-    featuredLoading.value = false
+    if (request === featuredRequest) featuredLoading.value = false
   }
+}
+
+const chooseSample = (value: string) => {
+  prompt.value = value
+  promptInput.value?.focus()
+}
+const clearMySearch = () => {
+  mySearch.appName = ''
+  searchMyApps()
+}
+const clearFeaturedSearch = () => {
+  featuredSearch.appName = ''
+  searchFeaturedApps()
 }
 
 const createApp = async () => {
@@ -118,7 +151,8 @@ const createApp = async () => {
     }
   } catch (error) {
     creationError.value = '创建请求未完成，请稍后重试。'
-    if (isAxiosError(error)) creationRequestId.value = String(error.response?.headers['x-request-id'] || '')
+    if (isAxiosError(error))
+      creationRequestId.value = String(error.response?.headers['x-request-id'] || '')
     message.error(creationError.value)
   } finally {
     creating.value = false
@@ -135,83 +169,96 @@ const searchFeaturedApps = () => {
   loadFeaturedApps()
 }
 
-onMounted(() => {
-  loadMyApps()
-  loadFeaturedApps()
-})
+watch(
+  () => loginUser.value.id,
+  () => {
+    myRequest++
+    myApps.value = []
+    myTotal.value = 0
+    myError.value = ''
+    myLoading.value = false
+    if (isLogin.value) void loadMyApps()
+  },
+  { immediate: true },
+)
+
+onMounted(loadFeaturedApps)
 </script>
 
 <template>
   <main class="home-page">
     <section class="hero-section" aria-labelledby="home-title">
       <div class="hero-inner">
-        <div class="hero-badge">
-          <span class="badge-dot" />
-          <span>新一代 AI 全栈应用生成</span>
-        </div>
-        <h1 id="home-title" class="hero-title">用自然语言，创造你的 Web 应用</h1>
-        <p class="hero-subtitle">
-          描述你的产品创意，AI 将实时生成交互完备、响应式的单页面与多文件应用
-        </p>
-
+        <h1 id="home-title" class="hero-title">把想法，变成应用</h1>
+        <p class="hero-subtitle">描述你想做什么，剩下的交给 AI。预览、修改，一步步完成你的作品。</p>
         <div class="creation-studio">
           <div class="prompt-box">
-            <div class="creation-mode-summary" role="status">
-              <strong>{{ GENERATION_MODE_LABELS[generationModeStore.defaultMode] }}</strong>
-              <span>{{ generationModeStore.defaultMode === 'workflow'
-                ? '分阶段生成，展示素材收集、代码质检与构建过程'
-                : '直接生成，通过对话持续完善应用' }}</span>
-            </div>
             <a-textarea
+              ref="promptInput"
               v-model:value="prompt"
               aria-label="描述你想创建的应用"
-              placeholder="例如：帮我创建一个极简暗黑风格的 SaaS 产品官网，包含核心优势、特性对比、定价方案和预约演示..."
-              :rows="4"
+              placeholder="例如：为我创建一个摄影作品集，以大幅图片展示作品，并提供联系入口…"
+              :rows="3"
               :maxlength="800"
-              show-count
               @press-enter.ctrl="createApp"
+              @press-enter.meta="createApp"
             />
-            <KnowledgeToggle v-model="useKnowledge" :disabled="creating" />
+            <div class="prompt-options">
+              <a-segmented
+                :value="generationModeStore.defaultMode"
+                :options="generationModeOptions"
+                :disabled="creating"
+                aria-label="新建应用生成模式"
+                @change="generationModeStore.setDefaultMode"
+              />
+              <span class="mode-description">{{
+                generationModeStore.defaultMode === 'workflow'
+                  ? '分阶段规划、生成与检查'
+                  : '直接生成，持续对话修改'
+              }}</span>
+            </div>
             <div class="prompt-actions">
-              <div class="prompt-tips">
-                <span class="kbd-hint">Ctrl + Enter</span>
-                <span>快速开始构建</span>
-              </div>
-              <a-tooltip title="立即创建并开始生成">
+              <KnowledgeToggle v-model="useKnowledge" :disabled="creating" />
+              <div class="submit-actions">
+                <span class="kbd-hint">⌘ / Ctrl ↵</span>
                 <a-button
                   type="primary"
-                  shape="circle"
-                  size="large"
                   :loading="creating"
-                  aria-label="创建应用"
-                  class="submit-circle-btn"
+                  :aria-label="creating ? '正在创建' : '开始生成'"
+                  class="create-button"
                   @click="createApp"
                 >
-                  <ArrowUpOutlined />
+                  {{ creating ? '正在创建' : '开始生成' }} <ArrowUpOutlined v-if="!creating" />
                 </a-button>
-              </a-tooltip>
+              </div>
             </div>
           </div>
-
           <div v-if="creationError" class="creation-diagnostic">
             <p role="alert">{{ creationError }}</p>
-            <p v-if="creationRequestId">请求编号：<span>{{ creationRequestId }}</span></p>
+            <p v-if="creationRequestId">请求编号：{{ creationRequestId }}</p>
             <p v-else>未取得请求编号，请保留当前需求后重试。</p>
-            <a-button v-if="creationRequestId" :aria-expanded="creationTraceOpen" @click="creationTraceOpen = !creationTraceOpen">查看创建诊断</a-button>
-            <GenerationTracePanel v-if="creationTraceOpen && creationRequestId" :request-id="creationRequestId" @close="creationTraceOpen = false" />
+            <a-button
+              v-if="creationRequestId"
+              :aria-expanded="creationTraceOpen"
+              @click="creationTraceOpen = !creationTraceOpen"
+              >查看创建诊断</a-button
+            >
+            <GenerationTracePanel
+              v-if="creationTraceOpen && creationRequestId"
+              :request-id="creationRequestId"
+              @close="creationTraceOpen = false"
+            />
           </div>
-
           <div class="sample-list" aria-label="灵感示例">
-            <span class="samples-label">灵感探索：</span>
             <button
               v-for="sample in promptSamples"
               :key="sample.label"
               type="button"
               class="sample-chip"
               :title="sample.prompt"
-              @click="prompt = sample.prompt"
+              @click="chooseSample(sample.prompt)"
             >
-              {{ sample.label }}
+              {{ sample.label }} <span aria-hidden="true">↗</span>
             </button>
           </div>
         </div>
@@ -219,83 +266,101 @@ onMounted(() => {
     </section>
 
     <div class="library">
-      <section class="app-section">
+      <section class="app-section" aria-labelledby="my-apps-title">
         <div class="section-header">
           <div>
-            <h2>我的作品</h2>
-            <p>继续完善与迭代已创建的 Web 应用</p>
+            <h2 id="my-apps-title">我的作品</h2>
+            <p>从上次停下的地方，继续创作。</p>
           </div>
           <a-input-search
+            v-if="isLogin"
             v-model:value="mySearch.appName"
-            placeholder="搜索我的应用..."
+            placeholder="搜索作品"
             aria-label="搜索我的应用"
             class="section-search"
             allow-clear
             @search="searchMyApps"
           />
         </div>
-        <a-spin :spinning="myLoading">
-          <div v-if="myApps.length" class="app-grid">
+        <div v-if="!isLogin" class="empty-placeholder">
+          <h3>你的下一个作品，从这里开始</h3>
+          <p>登录后，查看并继续编辑你创建的应用。</p>
+          <a-button @click="router.push('/user/login')">登录查看作品</a-button>
+        </div>
+        <template v-else>
+          <div v-if="myLoading" class="app-grid" aria-label="正在加载我的作品" role="status">
+            <div v-for="n in 3" :key="n" class="app-skeleton">
+              <a-skeleton active :paragraph="{ rows: 3 }" />
+            </div>
+          </div>
+          <div v-else-if="myError" class="list-notice" role="alert">
+            <p>{{ myError }}</p>
+            <a-button @click="loadMyApps">重新加载作品</a-button>
+          </div>
+          <div v-else-if="myApps.length" class="app-grid">
             <AppCard v-for="app in myApps" :key="app.id" :app="app" />
           </div>
           <div v-else class="empty-placeholder">
-            <a-empty description="暂无作品，在上方输入灵感开始你的第一个应用" />
+            <h3>{{ mySearch.appName ? '没有找到匹配的作品' : '还没有作品' }}</h3>
+            <p>
+              {{
+                mySearch.appName
+                  ? '试试其他名称，或清空搜索条件。'
+                  : '在上方写下想法，创建你的第一个应用。'
+              }}
+            </p>
+            <a-button v-if="mySearch.appName" @click="clearMySearch">清空搜索</a-button>
+            <a-button v-else @click="promptInput?.focus()">开始创作</a-button>
           </div>
-        </a-spin>
-        <a-pagination
-          v-if="myTotal > 6"
-          v-model:current="mySearch.pageNum"
-          v-model:page-size="mySearch.pageSize"
-          :total="myTotal"
-          :page-size-options="['6', '12', '24']"
-          show-size-changer
-          class="section-pagination"
-          @change="loadMyApps"
-          @show-size-change="loadMyApps"
-        />
+          <a-pagination
+            v-if="myTotal > 6 && !myError"
+            v-model:current="mySearch.pageNum"
+            v-model:page-size="mySearch.pageSize"
+            :total="myTotal"
+            :page-size-options="['6', '12', '24']"
+            show-size-changer
+            class="section-pagination"
+            @change="loadMyApps"
+          />
+        </template>
       </section>
 
-      <section class="app-section featured-section">
+      <section class="app-section featured-section" aria-labelledby="featured-title">
         <div class="section-header">
           <div>
-            <h2>精选案例库</h2>
-            <p>探索社区与官方创造的高质量灵感项目</p>
+            <h2 id="featured-title">精选案例</h2>
+            <p>看看其他想法，是怎样成为作品的。</p>
           </div>
           <a-input-search
             v-model:value="featuredSearch.appName"
-            placeholder="搜索精选项目..."
+            placeholder="搜索精选案例"
             aria-label="搜索精选应用"
             class="section-search"
             allow-clear
             @search="searchFeaturedApps"
           />
         </div>
-        <a-spin :spinning="featuredLoading">
-          <div v-if="featuredApps.length" class="featured-catalog">
-            <!-- 方案 C：首卡 Hero 展台 (第 1 页展示) -->
-            <div v-if="featuredSearch.pageNum === 1" class="hero-showcase-container">
-              <AppCard :app="featuredApps[0]" featured hero />
-            </div>
-
-            <!-- 其余精选项目常规网格 -->
-            <div
-              v-if="featuredSearch.pageNum !== 1 || featuredApps.length > 1"
-              class="app-grid"
-            >
-              <AppCard
-                v-for="app in (featuredSearch.pageNum === 1 ? featuredApps.slice(1) : featuredApps)"
-                :key="app.id"
-                :app="app"
-                featured
-              />
-            </div>
+        <div v-if="featuredLoading" class="app-grid" aria-label="正在加载精选案例" role="status">
+          <div v-for="n in 3" :key="n" class="app-skeleton">
+            <a-skeleton active :paragraph="{ rows: 3 }" />
           </div>
-          <div v-else class="empty-placeholder">
-            <a-empty description="暂无精选应用" />
-          </div>
-        </a-spin>
+        </div>
+        <div v-else-if="featuredError" class="list-notice" role="alert">
+          <p>{{ featuredError }}</p>
+          <a-button @click="loadFeaturedApps">重新加载案例</a-button>
+        </div>
+        <div v-else-if="featuredApps.length" class="app-grid">
+          <AppCard v-for="app in featuredApps" :key="app.id" :app="app" featured />
+        </div>
+        <div v-else class="empty-placeholder">
+          <h3>{{ featuredSearch.appName ? '没有找到匹配的案例' : '精选案例即将呈现' }}</h3>
+          <p>
+            {{ featuredSearch.appName ? '试试其他关键词。' : '你可以先从上方的灵感示例开始。' }}
+          </p>
+          <a-button v-if="featuredSearch.appName" @click="clearFeaturedSearch">清空搜索</a-button>
+        </div>
         <a-pagination
-          v-if="featuredTotal > 6"
+          v-if="featuredTotal > 6 && !featuredError"
           v-model:current="featuredSearch.pageNum"
           v-model:page-size="featuredSearch.pageSize"
           :total="featuredTotal"
@@ -303,7 +368,6 @@ onMounted(() => {
           show-size-changer
           class="section-pagination"
           @change="loadFeaturedApps"
-          @show-size-change="loadFeaturedApps"
         />
       </section>
     </div>
@@ -311,295 +375,273 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.creation-mode-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  padding: 14px 20px 0;
-  color: var(--ui-ink-faint);
-  font-size: 12px;
-}
-
-.creation-mode-summary strong {
-  color: var(--ui-ink);
-  font-weight: 600;
-}
-
 .home-page {
   background: var(--ui-shell);
 }
-
 .hero-section {
-  position: relative;
-  padding: 64px 24px 56px;
-  background:
-    radial-gradient(ellipse 60% 50% at 50% -10%, rgba(37, 99, 235, 0.08), transparent 70%),
-    linear-gradient(180deg, #ffffff 0%, var(--ui-shell) 100%);
-  border-bottom: 1px solid var(--ui-line);
+  padding: 72px 24px 56px;
 }
-
 .hero-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 860px;
+  max-width: 760px;
   margin: 0 auto;
   text-align: center;
 }
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  margin-bottom: 18px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ui-accent);
-  background: var(--ui-accent-soft);
-  border: 1px solid var(--ui-accent-border);
-  border-radius: 9999px;
-}
-
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: var(--ui-accent);
-  box-shadow: 0 0 6px rgba(37, 99, 235, 0.6);
-}
-
 .hero-title {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
+  font-size: 42px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.04em;
   color: var(--ui-ink);
-  font-size: clamp(30px, 3.6vw, 46px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.18;
 }
-
 .hero-subtitle {
-  max-width: 620px;
-  margin: 0 auto 32px;
-  color: var(--ui-ink-soft);
+  margin: 0 0 32px;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.7;
+  color: var(--ui-ink-soft);
 }
-
-.creation-studio {
-  width: 100%;
-}
-
 .prompt-box {
-  padding: 16px 18px 14px;
+  padding: 20px;
   background: var(--ui-surface);
   border: 1px solid var(--ui-line-strong);
-  border-radius: var(--ui-radius-xl);
-  box-shadow: var(--ui-shadow-lg);
-  transition: all 180ms ease;
+  border-radius: 16px;
   text-align: left;
+  box-shadow: var(--ui-shadow-xs);
 }
-
 .prompt-box:focus-within {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), var(--ui-shadow-md);
+  outline: 2px solid var(--ui-accent-border);
+  outline-offset: 2px;
 }
-
-.prompt-box :deep(.ant-input) {
-  min-height: 108px;
+.prompt-box :deep(textarea.ant-input) {
   padding: 0;
   border: 0 !important;
-  background: transparent;
   box-shadow: none !important;
-  resize: none;
-  font-size: 15px;
-  line-height: 1.65;
-  color: var(--ui-ink);
+  background: transparent;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 96px;
+  max-height: 240px;
 }
-
-.prompt-box :deep(.ant-input-data-count) {
+.prompt-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+.mode-description {
   color: var(--ui-ink-faint);
-  font-family: var(--ui-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
-
 .prompt-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
+  gap: 12px;
+  border-top: 1px solid var(--ui-line-subtle);
+  margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--ui-line);
 }
-
-.prompt-tips {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ui-ink-faint);
+.prompt-actions :deep(.knowledge-choice) {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
 }
-
-.kbd-hint {
-  padding: 2px 6px;
-  font-family: var(--ui-mono);
-  font-size: 11px;
-  color: var(--ui-ink-soft);
-  background: var(--ui-surface-muted);
-  border: 1px solid var(--ui-line);
-  border-radius: 4px;
-}
-
-.submit-circle-btn {
+.submit-actions {
   display: flex;
+  flex: none;
   align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  gap: 16px;
 }
-
-.submit-circle-btn:not(:disabled):hover {
-  transform: scale(1.05);
+.create-button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
 }
-
+.kbd-hint {
+  color: var(--ui-ink-faint);
+  font-size: 11px;
+}
 .sample-list {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 20px;
 }
-
-.samples-label {
-  color: var(--ui-ink-faint);
-  font-size: 12px;
-}
-
 .sample-chip {
-  padding: 5px 12px;
-  font-size: 12px;
-  color: var(--ui-ink-soft);
-  background: var(--ui-surface);
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 36px;
+  padding: 8px 16px;
+  background: transparent;
   border: 1px solid var(--ui-line);
-  border-radius: 9999px;
+  border-radius: 8px;
+  color: var(--ui-ink-soft);
+  font-size: 13px;
   cursor: pointer;
-  box-shadow: var(--ui-shadow-xs);
-  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-
+.sample-chip span {
+  color: var(--ui-ink-faint);
+}
 .sample-chip:hover {
   color: var(--ui-accent);
-  background: var(--ui-accent-soft);
+  background: var(--ui-surface);
   border-color: var(--ui-accent-border);
-  transform: translateY(-1px);
 }
-
 .library {
-  max-width: 1320px;
+  max-width: 1240px;
+  padding: 0 32px 56px;
   margin: 0 auto;
-  padding: 0 32px 64px;
 }
-
 .app-section {
-  padding: 40px 0;
+  padding: 32px 0;
 }
-
 .featured-section {
   border-top: 1px solid var(--ui-line);
 }
-
 .section-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-end;
   gap: 24px;
   margin-bottom: 24px;
 }
-
 .section-header h2 {
-  margin: 0 0 4px;
-  color: var(--ui-ink);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0 0 8px;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
 }
-
 .section-header p {
   margin: 0;
-  color: var(--ui-ink-soft);
+  color: var(--ui-ink-faint);
   font-size: 13px;
 }
-
 .section-search {
-  width: 260px;
+  width: 240px;
 }
-
-.featured-catalog {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.hero-showcase-container {
-  width: 100%;
-}
-
 .app-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 22px;
+  gap: 24px;
 }
-
-.empty-placeholder {
-  padding: 48px 0;
+.empty-placeholder,
+.list-notice {
+  text-align: center;
+  padding: 44px 20px;
+  border-top: 1px solid var(--ui-line);
 }
-
+.empty-placeholder h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.empty-placeholder p,
+.list-notice p {
+  color: var(--ui-ink-soft);
+  margin-bottom: 16px;
+}
+.list-notice {
+  color: var(--ui-danger);
+  background: var(--ui-danger-soft);
+  border-radius: 8px;
+  border: 0;
+}
+.app-skeleton {
+  min-height: 240px;
+  padding: 32px 24px;
+  border-radius: 10px;
+  background: var(--ui-surface);
+}
 .section-pagination {
   display: flex;
   justify-content: flex-end;
   margin-top: 24px;
 }
-
+.creation-diagnostic {
+  margin-top: 16px;
+  padding: 16px;
+  text-align: left;
+  background: var(--ui-danger-soft);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.creation-diagnostic p {
+  margin: 0 0 8px;
+}
 @media (max-width: 960px) {
-  .hero-section {
-    padding: 44px 20px 40px;
-  }
-
   .app-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .library {
-    padding: 0 20px 48px;
+  .hero-section {
+    padding-top: 48px;
   }
 }
-
 @media (max-width: 640px) {
-  .hero-title {
-    font-size: 28px;
+  .hero-section {
+    padding: 36px 16px 28px;
   }
-
-  .section-header {
+  .hero-title {
+    font-size: 30px;
+  }
+  .hero-subtitle {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .prompt-box {
+    padding: 16px;
+  }
+  .prompt-options {
+    align-items: flex-start;
     flex-direction: column;
+    gap: 8px;
+  }
+  .prompt-actions {
+    flex-wrap: wrap;
+  }
+  .prompt-actions :deep(.knowledge-choice) {
+    flex-basis: 100%;
+    padding: 0;
+  }
+  .submit-actions {
+    margin-left: auto;
+  }
+  .create-button {
+    height: 44px;
+  }
+  .kbd-hint {
+    display: none;
+  }
+  .sample-list {
+    gap: 8px;
+  }
+  .sample-chip {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .library {
+    padding: 0 16px 32px;
+  }
+  .section-header {
     align-items: stretch;
+    flex-direction: column;
     gap: 16px;
   }
-
   .section-search {
     width: 100%;
   }
-
   .app-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
-</style>
-
-<style scoped>
-.creation-diagnostic { text-align: left; padding: 16px; margin-top: 12px; color: var(--ui-ink); background: var(--ui-surface-muted); border-radius: var(--ui-radius); overflow-wrap: anywhere; }
-.creation-diagnostic p { margin: 0 0 8px; }
-.creation-diagnostic .trace-panel { margin-top: 12px; }
+@media (hover: none) {
+  .kbd-hint {
+    display: none;
+  }
+}
 </style>
