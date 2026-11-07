@@ -2,7 +2,7 @@
 
 ## 平台 UI 美化（2026-11-08）
 
-用户已批准按参考方案实施首页、生成工作台与三类管理员页面。需求 FROZEN；实现已完成，受控前端验收通过，独立复审 ship，正在完成代码同步。方案、任务和证据见 [阶段目录](phase/2026-11-07-platform-ui-beautification/PROPOSED_DESIGN.md)、[验收记录](phase/2026-11-07-platform-ui-beautification/VERIFICATION.md)。
+用户已批准按参考方案实施首页、生成工作台与三类管理员页面。需求 FROZEN；实现已完成，受控前端验收通过，独立复审 ship；状态 RELEASED（代码同步），功能提交 `a2d34c7` 已推送 `origin/main` 并核对完整远程哈希一致。方案、任务和证据见 [阶段目录](phase/2026-11-07-platform-ui-beautification/PROPOSED_DESIGN.md)、[验收记录](phase/2026-11-07-platform-ui-beautification/VERIFICATION.md)。
 
 首页将模式、知识库与生成动作集中到输入区，保留真实作品封面与明确状态。工作台采用 Cobalt 中性色与蓝色操作、预览侧工具栏、生成记录抽屉和手机分区；管理页采用 Ink／Almanac 的平面表格层级，保留筛选、分页、编辑、精选、删除确认及封面预览。Ant Design Vue 和 CSS 共享深浅色来源。现有 16 项测试、类型／生产构建、修改文件 lint 和 26 项生产浏览器验收通过；复审发现的深色链接对比度已修至 7.016:1。
 

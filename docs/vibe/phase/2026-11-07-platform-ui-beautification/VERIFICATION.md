@@ -1,7 +1,7 @@
 # 平台 UI 美化验收记录
 
 - 验证日期：2026-11-08。
-- 需求：FROZEN；设计已批准，实施完成。验证结论：VERIFIED（受控前端范围）；独立复审结论 ship，代码同步结果待本轮收尾补记。
+- 需求：FROZEN；设计已批准，实施完成。验证结论：VERIFIED（受控前端范围）；独立复审结论 ship；RELEASED（代码同步），未部署。
 - 范围：首页、生成工作台、用户／应用／对话管理页，以及共享主题和导航。
 - 有效方案：[PROPOSED_DESIGN.md](PROPOSED_DESIGN.md)；实施顺序：[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)。
 
@@ -70,4 +70,4 @@ node scripts/verify-platform-ui.mjs
 
 独立最终复审结论为 **ship**，记录见 `.evidence/ui-implementation-20261108/final-review.md`。发现的深色操作链接对比度问题已修复：ConfigProvider 的链接正常、悬停和按下颜色显式接入共享主题，深色实际对比度 7.016:1，新增 DOM 对比度断言通过。抽屉和深色编辑弹窗曾在入场动画首帧截图，已统一等待动画结束后重拍；封面放大预览也已保留并通过验收。无遗留发现。
 
-按项目持续授权仅提交本轮前端、验收脚本和文档并推送 `origin/main`，其他任务的后端／配置改动保留。代码同步结果在本轮收尾补记。未部署。
+按项目持续授权仅提交本轮前端、验收脚本和文档并推送 `origin/main`，其他任务的后端／配置改动保留。功能提交 `a2d34c7fcc5b5ce11cb0e256a63d211028d1380a` 已推送，远程 `refs/heads/main` 与该完整哈希一致；本记录随文档收尾提交同步。未部署。
