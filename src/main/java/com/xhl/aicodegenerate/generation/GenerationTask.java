@@ -9,6 +9,7 @@ import java.util.Map;
 @Data
 public class GenerationTask {
     private String id;
+    private String traceId;
     private Long appId;
     private Long userId;
     private String clientRequestId;

@@ -43,6 +43,14 @@ knife4j:
   setting:
     language: zh_cn
 
+# 新追踪表须由维护者先执行 sql/migrations/20261107_generation_trace.sql。
+# 停用后同时停止新记录、查询与清理；不删除表或改变生成任务状态。
+generation:
+  trace:
+    enabled: true
+    queue-capacity: 2048
+    maintenance-interval-seconds: 15
+
 
 
 # 本地依赖与检索效果完成验证后，在 application-local.yml 显式开启。

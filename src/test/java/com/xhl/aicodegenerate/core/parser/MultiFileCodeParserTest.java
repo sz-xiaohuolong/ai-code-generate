@@ -42,6 +42,8 @@ class MultiFileCodeParserTest {
         assertNotNull(result.getJsCode());
         assertTrue(result.getHtmlCode().contains("style.css"));
         assertTrue(result.getHtmlCode().contains("script.js"));
+        assertTrue(result.getHtmlCode().contains("\">\n</head>"));
+        assertTrue(result.getHtmlCode().contains("</script>\n</body>"));
         assertFalse(result.getHtmlCode().contains("<style>"));
         assertFalse(result.getHtmlCode().contains("console.log('loaded')"));
         assertTrue(result.getCssCode().contains("h1 { color: blue; }"));

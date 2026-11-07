@@ -1,10 +1,13 @@
 package com.xhl.aicodegenerate.generation;
 
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
+import com.xhl.aicodegenerate.observability.TraceModelMetadata;
+import com.xhl.aicodegenerate.observability.TraceSession;
 import dev.langchain4j.model.ModelProvider;
 import dev.langchain4j.model.chat.*;
 import dev.langchain4j.model.chat.request.*;
 import dev.langchain4j.model.chat.response.*;
+import io.opentelemetry.context.Context;
 
 import java.util.Set;
 import java.util.function.Consumer;
@@ -14,11 +17,13 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
     private final StreamingChatModel delegate;
     private final GenerationExecution execution;
     private final boolean includeKnowledge;
+    private final TraceSession.Step parent;
 
     private UsageTrackingStreamingModel(StreamingChatModel delegate, GenerationExecution execution, boolean includeKnowledge) {
         this.delegate = delegate;
         this.execution = execution;
         this.includeKnowledge = includeKnowledge;
+        this.parent = execution.trace() == null ? null : execution.trace().currentStep();
     }
 
     public static StreamingChatModel wrap(StreamingChatModel model, AppChatMemoryId id) {
@@ -57,7 +62,12 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
 
     private void invoke(ChatRequest request, StreamingChatResponseHandler handler, Consumer<Observation> call) {
         execution.modelStarted();
-        var observed = new Observation(handler);
+        var parameters = request.parameters() == null ? defaultRequestParameters()
+                : request.parameters().defaultedBy(defaultRequestParameters());
+        var currentParent = execution.trace() == null ? null : execution.trace().currentStep();
+        var step = TraceModelMetadata.start(execution.trace(), "streaming_model", "generation", parameters,
+                currentParent == null ? parent : currentParent);
+        var observed = new Observation(handler, step);
         try {
             execution.checkActive();
             call.accept(observed);
@@ -69,18 +79,23 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
 
     private final class Observation implements StreamingChatResponseHandler {
         private final StreamingChatResponseHandler target;
+        private final TraceSession.Step step;
+        private final Context context;
         private final GenerationExecution.ModelUsage usage = execution.newModelUsage();
         private volatile boolean terminal;
         private final Set<StreamingHandle> handles = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-        private Observation(StreamingChatResponseHandler target) {
+        private Observation(StreamingChatResponseHandler target, TraceSession.Step step) {
             this.target = target;
+            this.step = step;
+            this.context = step == null ? execution.traceContext() : step.context();
             execution.onCancel(this::cancelled);
         }
 
         private synchronized void cancelled() {
             if (!terminal) {
                 terminal = true;
+                if (step != null) step.cancel();
             }
         }
 
@@ -93,7 +108,7 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
             if (terminal) return;
             execution.checkActive();
             if (includeKnowledge && execution.knowledge() != null) execution.knowledge().submitted();
-            action.run();
+            try (var ignored = context.makeCurrent()) { action.run(); }
         }
 
         @Override public void onPartialResponse(String value) { partial(() -> target.onPartialResponse(value)); }
@@ -116,10 +131,11 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
                 deliver = !terminal;
                 terminal = true;
                 usage.record(value == null ? null : value.tokenUsage());
+                TraceModelMetadata.complete(step, value);
             }
             if (deliver) {
                 if (includeKnowledge && execution.knowledge() != null) execution.knowledge().submitted();
-                target.onCompleteResponse(value);
+                try (var ignored = context.makeCurrent()) { target.onCompleteResponse(value); }
             }
         }
 
@@ -127,12 +143,13 @@ public final class UsageTrackingStreamingModel implements StreamingChatModel {
             if (terminal) return false;
             if (includeKnowledge && execution.knowledge() != null) execution.knowledge().unconfirmed();
             terminal = true;
+            if (step != null) step.fail(error);
             return true;
         }
 
         @Override public void onError(Throwable error) {
             if (failed(error)) {
-                target.onError(error);
+                try (var ignored = context.makeCurrent()) { target.onError(error); }
             }
         }
     }

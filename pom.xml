@@ -43,6 +43,15 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
+        <!-- 显式元数据追踪；版本由 Spring Boot BOM 管理，不自动导出正文。 -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -212,4 +221,13 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>evaluation</id>
+            <build>
+                <!-- 独立命令的编译输出，不与正常服务或测试的 target/classes 相互覆盖。 -->
+                <directory>${project.basedir}/target/evaluation</directory>
+            </build>
+        </profile>
+    </profiles>
 </project>

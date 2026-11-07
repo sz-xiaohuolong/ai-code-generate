@@ -1,6 +1,9 @@
 package com.xhl.aicodegenerate.langgraph4j;
 
 import com.xhl.aicodegenerate.ai.AppChatMemoryId;
+import com.xhl.aicodegenerate.generation.GenerationExecution;
+import com.xhl.aicodegenerate.observability.TraceSession;
+import io.opentelemetry.context.Context;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
@@ -147,8 +150,11 @@ public class CodeGenWorkflow {
     private Flux<WorkflowStreamEvent> executeWorkflowEvents(String prompt, Long appId, Long userId,
             CodeGenTypeEnum type, ChatMemoryProvider memoryProvider, String taskId) {
         return Flux.create(sink -> {
+            GenerationExecution execution = GenerationExecution.find(taskId);
+            Context captured = execution == null ? Context.current() : execution.traceContext();
             Thread worker = Thread.ofVirtual().name("workflow-" + appId).unstarted(() -> {
-                try {
+                try (var ignored = captured.makeCurrent()) {
+                    if (execution != null) execution.checkActive();
                     sink.next(progress("workflow_start", "workflow", "工作流", "running", "开始执行工作流", 0));
                     WorkflowContext initial = initialContext(prompt, appId, userId, type);
                     initial.setTaskId(taskId);
@@ -167,6 +173,15 @@ public class CodeGenWorkflow {
                 }
             });
             sink.onCancel(worker::interrupt);
+            if (execution != null) execution.onCancel(() -> {
+                worker.interrupt();
+                if (Thread.currentThread() == worker) return;
+                boolean interrupted = Thread.interrupted();
+                try { worker.join(5000); }
+                catch (InterruptedException error) { interrupted = true; }
+                finally { if (interrupted) Thread.currentThread().interrupt(); }
+                if (worker.isAlive()) throw new IllegalStateException("工作流线程尚未完成清理");
+            });
             worker.start();
         });
     }
@@ -235,32 +250,49 @@ public class CodeGenWorkflow {
             checkCancelled(cancelled);
             WorkflowContext before = WorkflowContext.getContext(state);
             int retryCount = before == null ? 0 : before.getQualityCheckRetryCount();
-            events.accept(progress("step_started", id, name, "running", "正在" + name, retryCount));
-            return action.apply(state).thenApply(update -> {
-                checkCancelled(cancelled);
-                WorkflowContext after = WorkflowContext.getContext(new MessagesState<>(update));
-                String status = "completed";
-                String message = name + "已完成";
-                if (StrUtil.isNotBlank(after.getErrorMessage())) {
-                    events.accept(progress("step_completed", id, name, "failed", after.getErrorMessage(), retryCount));
-                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, after.getErrorMessage());
-                }
-                if (CODE_QUALITY_CHECK.equals(id)) {
-                    if (StrUtil.isNotBlank(after.getQualityCheckSkippedReason())) {
-                        status = "skipped";
-                        message = after.getQualityCheckSkippedReason();
-                    } else if (after.getQualityResult() == null || !Boolean.TRUE.equals(after.getQualityResult().getIsValid())) {
-                        if (after.getQualityCheckRetryCount() >= WorkflowContext.MAX_QUALITY_RETRY_COUNT) {
-                            events.accept(progress("step_completed", id, name, "failed", "代码质检失败，已达到最大重试次数", retryCount));
-                            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码质检失败，已达到最大重试次数");
+            GenerationExecution run = before == null ? null : GenerationExecution.find(before.getTaskId());
+            TraceSession.Step step = run == null ? null : run.traceStep(TraceSession.Kind.STAGE, id);
+            Context captured = step == null ? Context.current() : step.context();
+            try (var ignored = captured.makeCurrent()) {
+                events.accept(progress("step_started", id, name, "running", "正在" + name, retryCount));
+                return action.apply(state).thenApply(update -> {
+                    try (var callbackScope = captured.makeCurrent()) {
+                        checkCancelled(cancelled);
+                        WorkflowContext after = WorkflowContext.getContext(new MessagesState<>(update));
+                        String status = "completed";
+                        String message = name + "已完成";
+                        if (StrUtil.isNotBlank(after.getErrorMessage())) {
+                            events.accept(progress("step_completed", id, name, "failed", after.getErrorMessage(), retryCount));
+                            throw new BusinessException(ErrorCode.SYSTEM_ERROR, after.getErrorMessage());
                         }
-                        status = "retrying";
-                        message = "质检未通过，准备第 " + (after.getQualityCheckRetryCount() + 1) + " 次修复";
+                        if (CODE_QUALITY_CHECK.equals(id)) {
+                            if (StrUtil.isNotBlank(after.getQualityCheckSkippedReason())) {
+                                status = "skipped";
+                                message = after.getQualityCheckSkippedReason();
+                            } else if (after.getQualityResult() == null || !Boolean.TRUE.equals(after.getQualityResult().getIsValid())) {
+                                if (after.getQualityCheckRetryCount() >= WorkflowContext.MAX_QUALITY_RETRY_COUNT) {
+                                    events.accept(progress("step_completed", id, name, "failed", "代码质检失败，已达到最大重试次数", retryCount));
+                                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码质检失败，已达到最大重试次数");
+                                }
+                                status = "retrying";
+                                message = "质检未通过，准备第 " + (after.getQualityCheckRetryCount() + 1) + " 次修复";
+                            }
+                        }
+                        events.accept(progress("step_completed", id, name, status, message, after.getQualityCheckRetryCount()));
+                        if (step != null) {
+                            if ("skipped".equals(status)) step.skip();
+                            else if ("retrying".equals(status)) step.fail(new IllegalStateException("质量检查未通过"));
+                            else step.succeed();
+                        }
+                        return update;
                     }
-                }
-                events.accept(progress("step_completed", id, name, status, message, after.getQualityCheckRetryCount()));
-                return update;
-            });
+                }).whenComplete((update, error) -> {
+                    if (step != null && error != null) step.fail(error);
+                });
+            } catch (RuntimeException error) {
+                if (step != null) step.fail(error);
+                throw error;
+            }
         };
     }
 

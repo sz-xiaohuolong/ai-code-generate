@@ -27,6 +27,8 @@ class CodeParserTest {
         HtmlCodeResult result = CodeParser.parseHtmlCode(codeContent);
         assertNotNull(result);
         assertNotNull(result.getHtmlCode());
+        assertTrue(result.getHtmlCode().startsWith("<!DOCTYPE html>"));
+        assertTrue(result.getHtmlCode().endsWith("</html>"));
     }
 
     @Test

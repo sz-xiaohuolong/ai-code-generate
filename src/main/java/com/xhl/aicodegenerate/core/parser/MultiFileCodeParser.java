@@ -119,10 +119,10 @@ public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
     private String addExternalReferences(String htmlCode, boolean hasCssCode, boolean hasJsCode) {
         String result = htmlCode;
         if (hasCssCode && !STYLE_CSS_LINK_PATTERN.matcher(result).find()) {
-            result = result.replaceFirst("(?i)</head>", "    <link rel=\"stylesheet\" href=\"style.css\">\\n</head>");
+            result = result.replaceFirst("(?i)</head>", "    <link rel=\"stylesheet\" href=\"style.css\">\n</head>");
         }
         if (hasJsCode && !SCRIPT_JS_LINK_PATTERN.matcher(result).find()) {
-            result = result.replaceFirst("(?i)</body>", "    <script src=\"script.js\"></script>\\n</body>");
+            result = result.replaceFirst("(?i)</body>", "    <script src=\"script.js\"></script>\n</body>");
         }
         return result;
     }

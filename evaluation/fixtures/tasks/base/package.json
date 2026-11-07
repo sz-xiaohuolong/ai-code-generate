@@ -1,0 +1,16 @@
+{
+  "name": "evaluation-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "vue": "3.5.32"
+  },
+  "devDependencies": {
+    "vite": "7.3.2",
+    "@vitejs/plugin-vue": "6.0.5"
+  }
+}

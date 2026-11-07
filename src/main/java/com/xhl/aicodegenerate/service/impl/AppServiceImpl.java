@@ -57,6 +57,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
     @Resource private com.xhl.aicodegenerate.generation.GenerationWorkspace generationWorkspace;
+    @Resource private com.xhl.aicodegenerate.observability.GenerationTraceMaintenance generationTraceMaintenance;
+    @Resource private com.xhl.aicodegenerate.observability.GenerationTraceRecorder generationTraceRecorder;
 
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
@@ -92,25 +94,49 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Override
     public Long addApp(AppAddRequest appAddRequest, User loginUser) {
+        return addApp(appAddRequest, loginUser, java.util.UUID.randomUUID().toString());
+    }
+
+    @Override
+    public Long addApp(AppAddRequest appAddRequest, User loginUser, String requestId) {
         // 参数校验
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null || loginUser.getId() == null, ErrorCode.NOT_LOGIN_ERROR);
         String initPrompt = appAddRequest.getInitPrompt();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
         GenerationModeEnum mode = GenerationModeEnum.resolve(appAddRequest.getGenerationMode());
-        // 构造入库对象
-        App app = new App();
-        BeanUtil.copyProperties(appAddRequest, app);
-        app.setUserId(loginUser.getId());
-        app.setGenerationMode(mode.getValue());
-        // 应用名称暂时为 initPrompt 前 12 位
-        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // 使用 AI 智能选择代码生成类型
-        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
-        app.setCodeGenType(selectedCodeGenType.getValue());
-        // 插入数据库
-        boolean result = this.save(app);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-        log.info("应用创建成功，ID: {}, 类型: {}", app.getId(), selectedCodeGenType.getValue());
-        return app.getId();
+        var trace = generationTraceRecorder == null ? null
+                : generationTraceRecorder.startCreation(requestId, loginUser.getId(), mode.getValue());
+        boolean saveAttempted = false;
+        try {
+            App app = new App();
+            BeanUtil.copyProperties(appAddRequest, app);
+            app.setUserId(loginUser.getId());
+            app.setGenerationMode(mode.getValue());
+            app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
+            CodeGenTypeEnum selectedCodeGenType = trace == null
+                    ? aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt)
+                    : aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt, trace);
+            app.setCodeGenType(selectedCodeGenType.getValue());
+            saveAttempted = true;
+            boolean result = this.save(app);
+            ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+            if (trace != null) {
+                trace.bindApplication(app.getId(), app.getCodeGenType());
+                trace.finish("SUCCEEDED");
+            }
+            log.info("应用创建成功，ID: {}, 类型: {}", app.getId(), selectedCodeGenType.getValue());
+            return app.getId();
+        } catch (RuntimeException error) {
+            if (trace != null) {
+                if (!saveAttempted) {
+                    trace.failedBeforeApplicationSave();
+                }
+                trace.failure(error);
+                trace.finish("FAILED");
+            }
+            throw error;
+        }
     }
 
     @Override
@@ -297,6 +323,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         boolean result = this.removeById(appId);
         if (result) {
             chatHistoryService.deleteByAppId(appId);
+            generationTraceMaintenance.applicationDeleted(appId);
         }
         return result;
     }

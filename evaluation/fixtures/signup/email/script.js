@@ -1,0 +1,1 @@
+document.querySelector("[data-testid=signup-form]").onsubmit=e=>{e.preventDefault();document.querySelector("[data-testid=signup-result]").textContent="报名成功"};

@@ -30,6 +30,62 @@ class GenerationTaskServiceTest {
     GenerationTaskService service(GenerationTaskRunner runner, Duration budget) {
         return new GenerationTaskService(store, new GenerationWorkspace(store, temp.resolve("tasks"), temp.resolve("legacy")), apps, runner, budget);
     }
+
+    @Test void traceFollowsClaimCleanupAndCommitAndIsReusedAfterDisconnect() throws Exception {
+        var roots = new java.util.concurrent.CopyOnWriteArrayList<com.xhl.aicodegenerate.entity.GenerationTrace>();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var recorder = new com.xhl.aicodegenerate.observability.GenerationTraceRecorder((root, step) -> roots.add(root), java.time.Clock.systemUTC(), 64);
+             var service = new GenerationTaskService(store,
+                     new GenerationWorkspace(store, temp.resolve("tasks"), temp.resolve("legacy")), apps,
+                     (task, run, output, progress) -> {
+                         assertNotNull(run.trace());
+                         entered.countDown(); release.await();
+                         Files.writeString(run.root().resolve("index.html"), "<html><body>可用结果</body></html>");
+                     }, Duration.ofSeconds(10), recorder)) {
+            String request = UUID.randomUUID().toString();
+            var task = service.start(401L, "追踪完整生命周期", request, user);
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            service.events(task.getId(), user).take(1).blockLast(Duration.ofSeconds(2));
+            assertEquals(task.getTraceId(), service.start(401L, "追踪完整生命周期", request, user).getTraceId());
+            assertTrue(recorder.awaitIdle(Duration.ofSeconds(2)));
+            assertEquals("RUNNING", roots.getLast().getExecutionStatus());
+            release.countDown();
+            assertEquals(TaskStatus.SUCCEEDED, awaitTerminal(service, task.getId()).getStatus());
+            for (int i = 0; i < 100 && !roots.stream().anyMatch(root -> "SUCCEEDED".equals(root.getExecutionStatus())); i++) Thread.sleep(10);
+            assertTrue(recorder.awaitIdle(Duration.ofSeconds(2)));
+            assertEquals("SUCCEEDED", roots.getLast().getExecutionStatus());
+            assertNotNull(roots.getLast().getArtifactDigest());
+            assertEquals("401/" + task.getId(), roots.getLast().getArtifactRef());
+            assertEquals(1, roots.stream().map(com.xhl.aicodegenerate.entity.GenerationTrace::getTraceId).distinct().count());
+        } finally { release.countDown(); }
+    }
+
+    @Test void explicitStopHasSeparateTraceStepAndTraceStorageFailureCannotFailTask() throws Exception {
+        var steps = new java.util.concurrent.CopyOnWriteArrayList<com.xhl.aicodegenerate.entity.GenerationTraceStep>();
+        var entered = new CountDownLatch(1);
+        try (var recorder = new com.xhl.aicodegenerate.observability.GenerationTraceRecorder((root, step) -> {
+            if (step != null) steps.add(step);
+        }, java.time.Clock.systemUTC(), 64);
+             var service = new GenerationTaskService(store,
+                     new GenerationWorkspace(store, temp.resolve("tasks"), temp.resolve("legacy")), apps,
+                     (task, run, output, progress) -> { entered.countDown(); new CountDownLatch(1).await(); }, Duration.ofSeconds(10), recorder)) {
+            var task = service.start(401L, "停止追踪", UUID.randomUUID().toString(), user);
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            service.stop(task.getId(), user);
+            assertEquals(TaskStatus.CANCELLED, awaitTerminal(service, task.getId()).getStatus());
+            assertTrue(recorder.awaitIdle(Duration.ofSeconds(2)));
+            assertTrue(steps.stream().anyMatch(step -> "STOP".equals(step.getStepKind()) && "SUCCEEDED".equals(step.getStatus())));
+        }
+        try (var recorder = new com.xhl.aicodegenerate.observability.GenerationTraceRecorder((root, step) -> { throw new IllegalStateException("追踪存储故障"); }, java.time.Clock.systemUTC(), 64);
+             var service = new GenerationTaskService(store,
+                     new GenerationWorkspace(store, temp.resolve("tasks"), temp.resolve("legacy")), apps,
+                     (task, run, output, progress) -> Files.writeString(run.root().resolve("index.html"), "可用结果"),
+                     Duration.ofSeconds(10), recorder)) {
+            var task = service.start(401L, "存储故障", UUID.randomUUID().toString(), user);
+            assertEquals(TaskStatus.SUCCEEDED, awaitTerminal(service, task.getId()).getStatus());
+        }
+    }
     @Test void disconnectDoesNotStopExecutionAndDuplicateRequestDoesNotRunAgain() throws Exception {
         var calls = new AtomicInteger(); var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         try (var service = service((task, run, output, progress) -> {

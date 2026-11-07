@@ -1,0 +1,36 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"inventory-search\"]",
+      "value": "笔"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"inventory-row\"]",
+      "expected": "2"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"inventory-search\"]",
+      "value": "笔记本"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"inventory-row\"]",
+      "expected": "1"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"inventory-row\"] [data-testid=\"inventory-name\"]",
+      "expected": "笔记本"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"inventory-row\"] [data-testid=\"inventory-stock\"]",
+      "expected": "0"
+    }
+  ],
+  "engineering": null
+}

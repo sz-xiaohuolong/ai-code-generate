@@ -6,6 +6,8 @@ import { message } from 'ant-design-vue'
 import AppCard from '@/components/AppCard.vue'
 import KnowledgeToggle from '@/components/KnowledgeToggle.vue'
 import { rememberFirstKnowledgeRequest } from '@/utils/knowledgeRequest'
+import GenerationTracePanel from '@/components/GenerationTracePanel.vue'
+import { isAxiosError } from 'axios'
 import { addApp, listFeaturedAppVoByPage, listMyAppVoByPage } from '@/api/appController'
 import { useGenerationModeStore } from '@/stores/generationMode'
 import { GENERATION_MODE_LABELS } from '@/utils/workflowProgress'
@@ -16,6 +18,9 @@ const router = useRouter()
 const prompt = ref('')
 const creating = ref(false)
 const useKnowledge = ref(false)
+const creationError = ref('')
+const creationRequestId = ref('')
+const creationTraceOpen = ref(false)
 const myApps = ref<API.AppVO[]>([])
 const featuredApps = ref<API.AppVO[]>([])
 const myLoading = ref(false)
@@ -90,6 +95,7 @@ const loadFeaturedApps = async () => {
 }
 
 const createApp = async () => {
+  if (creating.value) return
   const initPrompt = prompt.value.trim()
   if (!initPrompt) {
     message.warning('请输入你想创建的应用')
@@ -97,14 +103,23 @@ const createApp = async () => {
   }
   creating.value = true
   const selectedKnowledge = useKnowledge.value
+  creationError.value = ''
+  creationRequestId.value = ''
+  creationTraceOpen.value = false
   try {
     const res = await addApp({ initPrompt, generationMode: generationModeStore.defaultMode })
     if (res.data.code === 0 && res.data.data) {
       rememberFirstKnowledgeRequest(String(res.data.data), selectedKnowledge)
       await router.push(`/app/chat/${res.data.data}`)
     } else {
-      message.error(res.data.message || '创建应用失败')
+      creationError.value = res.data.message || '创建应用失败'
+      creationRequestId.value = String(res.headers['x-request-id'] || '')
+      message.error(creationError.value)
     }
+  } catch (error) {
+    creationError.value = '创建请求未完成，请稍后重试。'
+    if (isAxiosError(error)) creationRequestId.value = String(error.response?.headers['x-request-id'] || '')
+    message.error(creationError.value)
   } finally {
     creating.value = false
   }
@@ -176,6 +191,14 @@ onMounted(() => {
                 </a-button>
               </a-tooltip>
             </div>
+          </div>
+
+          <div v-if="creationError" class="creation-diagnostic">
+            <p role="alert">{{ creationError }}</p>
+            <p v-if="creationRequestId">请求编号：<span>{{ creationRequestId }}</span></p>
+            <p v-else>未取得请求编号，请保留当前需求后重试。</p>
+            <a-button v-if="creationRequestId" :aria-expanded="creationTraceOpen" @click="creationTraceOpen = !creationTraceOpen">查看创建诊断</a-button>
+            <GenerationTracePanel v-if="creationTraceOpen && creationRequestId" :request-id="creationRequestId" @close="creationTraceOpen = false" />
           </div>
 
           <div class="sample-list" aria-label="灵感示例">
@@ -573,4 +596,10 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 }
+</style>
+
+<style scoped>
+.creation-diagnostic { text-align: left; padding: 16px; margin-top: 12px; color: var(--ui-ink); background: var(--ui-surface-muted); border-radius: var(--ui-radius); overflow-wrap: anywhere; }
+.creation-diagnostic p { margin: 0 0 8px; }
+.creation-diagnostic .trace-panel { margin-top: 12px; }
 </style>

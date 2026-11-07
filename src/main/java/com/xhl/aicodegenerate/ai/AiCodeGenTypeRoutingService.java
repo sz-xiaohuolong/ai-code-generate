@@ -17,4 +17,9 @@ public interface AiCodeGenTypeRoutingService {
      */
     @SystemMessage(fromResource = "prompt/codegen-routing-system-prompt.txt")
     CodeGenTypeEnum routeCodeGenType(String userPrompt);
+
+    /** 显式传递本次创建追踪；原调用入口继续兼容。 */
+    default CodeGenTypeEnum routeCodeGenType(String userPrompt, com.xhl.aicodegenerate.observability.TraceSession trace) {
+        return routeCodeGenType(userPrompt);
+    }
 }

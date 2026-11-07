@@ -14,6 +14,31 @@ import static org.mockito.ArgumentMatchers.*;
 class VueDeliveryServiceTest {
     @TempDir Path root;
     BuildResult error(String text) { return new BuildResult("build", 1, "", text, BuildResult.Kind.CODE, false); }
+    @Test void tracePreservesFailedBuildRepairAndSecondSuccessfulBuild() {
+        var steps = new java.util.concurrent.CopyOnWriteArrayList<com.xhl.aicodegenerate.entity.GenerationTraceStep>();
+        var builder = mock(VueProjectBuilder.class);
+        var preview = mock(PreviewVerifier.class);
+        when(builder.buildDetailed(any(), any())).thenReturn(error("secret=/Users/private"), new BuildResult("build", 0, "", "", BuildResult.Kind.NONE, false));
+        when(preview.verify(any(), eq(true), any())).thenReturn(new BuildResult("preview", 0, "", "", BuildResult.Kind.NONE, false));
+        var service = new VueDeliveryService(builder, preview, (id, diagnostic, output) -> { }, 2);
+        try (var recorder = new com.xhl.aicodegenerate.observability.GenerationTraceRecorder((trace, step) -> {
+            if (step != null) { steps.removeIf(old -> old.getSpanId().equals(step.getSpanId())); steps.add(step); }
+        }, java.time.Clock.systemUTC(), 128);
+             var run = new GenerationExecution("build-trace", root, Duration.ofSeconds(20), () -> true)) {
+            run.attachTrace(recorder.startGeneration(run.id(), 1L, 1L, "standard", "vue_project"));
+            service.deliver(run, new AppChatMemoryId(1L, 1L, run.id()), text -> { }, event -> { });
+            run.trace().finish("SUCCEEDED");
+            assertTrue(recorder.awaitIdle(Duration.ofSeconds(2)));
+            var builds = steps.stream().filter(step -> "BUILD".equals(step.getStepKind())).toList();
+            assertEquals(2, builds.size());
+            assertEquals("FAILED", builds.get(0).getStatus());
+            assertEquals("SUCCEEDED", builds.get(1).getStatus());
+            assertEquals(2, builds.get(1).getAttemptNo());
+            assertTrue(steps.stream().anyMatch(step -> "vue_repair".equals(step.getStepName()) && "SUCCEEDED".equals(step.getStatus())));
+            assertTrue(steps.stream().anyMatch(step -> "PREVIEW".equals(step.getStepKind()) && "SUCCEEDED".equals(step.getStatus())));
+            assertFalse(steps.toString().contains("secret="));
+        }
+    }
     @Test void fixesCompilerErrorAndVerifiesAgain() throws Exception {
         var builder = mock(VueProjectBuilder.class); var preview = mock(PreviewVerifier.class); var fixes = new AtomicInteger();
         when(builder.buildDetailed(any(), any())).thenReturn(error("App.vue:4:1 标签未闭合"), new BuildResult("build", 0, "", "", BuildResult.Kind.NONE, false));

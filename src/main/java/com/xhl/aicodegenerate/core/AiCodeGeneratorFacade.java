@@ -11,6 +11,8 @@ import com.xhl.aicodegenerate.core.parser.CodeParserExecutor;
 import com.xhl.aicodegenerate.core.saver.CodeFileSaverExecutor;
 import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
+import com.xhl.aicodegenerate.exception.IncompleteCodeException;
+import com.xhl.aicodegenerate.generation.GenerationExecution;
 import com.xhl.aicodegenerate.model.dto.ai.CodeGenStreamMessage;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import cn.hutool.json.JSONUtil;
@@ -32,6 +34,7 @@ import java.nio.file.Paths;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CancellationException;
+import java.util.Map;
 
 /**
  * AI 代码生成外观类，组合生成和保存功能
@@ -126,14 +129,8 @@ public class AiCodeGeneratorFacade {
                 ? aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum)
                 : aiCodeGeneratorServiceFactory.createAiCodeGeneratorService(memoryId, codeGenTypeEnum, memoryProvider);
         return switch (codeGenTypeEnum) {
-            case HTML -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.HTML, memoryId, finalizeProject);
-            }
-            case MULTI_FILE -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(memoryId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, memoryId, finalizeProject);
-            }
+            case HTML, MULTI_FILE -> generateNativeCode(aiCodeGeneratorService, userMessage,
+                    codeGenTypeEnum, memoryId, finalizeProject);
             case VUE_PROJECT -> {
                 TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeTokenStream(memoryId, userMessage);
                 yield tokenStreamToFlux(tokenStream, memoryId, finalizeProject);
@@ -143,6 +140,62 @@ public class AiCodeGeneratorFacade {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
             }
         };
+    }
+
+    /** 完整性失败只重生成一次；供应商异常、取消和超时直接交回任务处理。 */
+    private Flux<String> generateNativeCode(AiCodeGeneratorService service, String userMessage,
+                                            CodeGenTypeEnum type, AppChatMemoryId memoryId,
+                                            boolean finalizeProject) {
+        GenerationExecution execution = GenerationExecution.find(memoryId.getTaskId());
+        var parentContext = execution == null ? io.opentelemetry.context.Context.current() : execution.traceContext();
+        return nativeAttempt(service, userMessage, type, memoryId, finalizeProject, parentContext)
+                .onErrorResume(IncompleteCodeException.class, error -> Flux.defer(() -> {
+                    checkTask(memoryId);
+                    if (memoryId.getTaskId() != null) {
+                        GenerationExecution.require(memoryId.getTaskId()).progress(Map.of(
+                                "id", "code_generator", "name", "代码完整性修复", "status", "running",
+                                "message", "检测到代码不完整，正在重新生成完整文件"));
+                    }
+                    log.warn("原生代码不完整，执行一次修复：{}", error.getMessage());
+                    String contract = type == CodeGenTypeEnum.HTML
+                            ? "完整输出一个 html 代码块，包含所有样式、脚本和 </html> 结束标签。"
+                            : "依次完整输出 index.html、style.css、script.js，分别使用 html、css、javascript 三个代码块，并关闭每个围栏。";
+                    String repair = userMessage + "\n\n交付完整性检查未通过：" + error.getMessage()
+                            + "\n请重新生成全部文件，不要只补片段。" + contract
+                            + "保留原需求功能，精简重复结构、装饰和注释，为脚本和最后一个文件预留输出空间，不要省略代码。";
+                    return nativeAttempt(service, repair, type, memoryId, finalizeProject, parentContext);
+                }));
+    }
+
+    private Flux<String> nativeAttempt(AiCodeGeneratorService service, String prompt, CodeGenTypeEnum type,
+                                       AppChatMemoryId memoryId, boolean finalizeProject,
+                                       io.opentelemetry.context.Context parentContext) {
+        return Flux.defer(() -> {
+            checkTask(memoryId);
+            GenerationExecution run = GenerationExecution.find(memoryId.getTaskId());
+            com.xhl.aicodegenerate.observability.TraceSession.Step step;
+            try (var ignored = parentContext.makeCurrent()) {
+                step = run == null ? null : run.traceStep(com.xhl.aicodegenerate.observability.TraceSession.Kind.STAGE, "native_generation");
+            }
+            try (var attemptScope = (step == null ? parentContext : step.context()).makeCurrent()) {
+                Flux<String> stream = type == CodeGenTypeEnum.HTML
+                        ? service.generateHtmlCodeStream(memoryId, prompt)
+                        : service.generateMultiFileCodeStream(memoryId, prompt);
+                // 每次订阅和修复独立收集，不能把两轮代码拼成一个文档。
+                Flux<String> result = processCodeStream(stream, type, memoryId, finalizeProject);
+                if (step == null) return result;
+                Flux<String> tracked = result.doOnComplete(step::succeed).doOnError(step::fail).doOnCancel(step::cancel);
+                // 模型在订阅时才启动；范围必须覆盖真实 subscribe，异步回调由模型包装器继续传递。
+                return new Flux<String>() {
+                    @Override public void subscribe(reactor.core.CoreSubscriber<? super String> subscriber) {
+                        try (var ignored = step.context().makeCurrent()) { tracked.subscribe(subscriber); }
+                    }
+                };
+            } catch (RuntimeException error) {
+                if (step != null) step.fail(error);
+                throw error;
+            }
+        });
     }
 
 
@@ -284,6 +337,8 @@ public class AiCodeGeneratorFacade {
                 if (finalizeProject) {
                     triggerScreenshot(memoryId.getAppId(), codeGenType, savedDir);
                 }
+            } catch (IncompleteCodeException | CancellationException | GenerationExecution.BudgetExceeded e) {
+                throw e;
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "保存生成代码失败：" + e.getMessage());

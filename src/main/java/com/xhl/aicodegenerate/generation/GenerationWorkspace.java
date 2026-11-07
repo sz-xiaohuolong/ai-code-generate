@@ -19,7 +19,7 @@ public class GenerationWorkspace {
     @Autowired public GenerationWorkspace(RedisTaskStore store) {
         this(store, Path.of(System.getProperty("user.dir"), "tmp/generation_tasks"), Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR));
     }
-    GenerationWorkspace(RedisTaskStore store, Path tasks, Path legacy) {
+    public GenerationWorkspace(RedisTaskStore store, Path tasks, Path legacy) {
         this.store = store; this.tasks = tasks.toAbsolutePath().normalize(); this.legacy = legacy.toAbsolutePath().normalize();
     }
     public Path taskRoot(Long appId, String taskId) {

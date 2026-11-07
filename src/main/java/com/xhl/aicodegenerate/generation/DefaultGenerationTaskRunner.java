@@ -36,9 +36,10 @@ public class DefaultGenerationTaskRunner implements GenerationTaskRunner {
     @Override public void run(GenerationTask task, GenerationExecution run, Consumer<String> output, Consumer<Map<String, Object>> progress) {
         AppChatMemoryId id = new AppChatMemoryId(task.getAppId(), task.getUserId(), task.getId());
         var formal = memories.get(new AppChatMemoryId(task.getAppId(), task.getUserId()));
-        run.captureRequirements(formal.messages(), task.getPrompt());
+        var messages = formal.messages();
+        run.captureRequirements(messages, task.getPrompt());
         var scratch = MessageWindowChatMemory.withMaxMessages(20);
-        scratch.add(formal.messages());
+        scratch.add(messages);
         CodeGenTypeEnum type = CodeGenTypeEnum.getEnumByValue(task.getCodeGenType());
         try {
             if (type == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "应用代码类型无效，请重新创建应用");
@@ -59,7 +60,8 @@ public class DefaultGenerationTaskRunner implements GenerationTaskRunner {
                 if (!isWorkflow) delivery.deliver(run, id, output, progress);
             } else {
                 progress.accept(VueDeliveryService.event("preview_check", "预览检查", "running", "正在检查生成页面", 0));
-                BuildResult result = verifier.verify(run.root(), false, run);
+                BuildResult result = run.traceBuild(com.xhl.aicodegenerate.observability.TraceSession.Kind.PREVIEW,
+                        "preview_check", () -> verifier.verify(run.root(), false, run));
                 if (!result.success()) throw new BusinessException(ErrorCode.OPERATION_ERROR, result.diagnostic());
                 progress.accept(VueDeliveryService.event("preview_check", "预览检查", "completed", "页面检查已通过", 0));
             }

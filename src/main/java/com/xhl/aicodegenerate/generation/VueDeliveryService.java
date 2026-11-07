@@ -26,11 +26,13 @@ public class VueDeliveryService {
         for (int attempt = 0; ; attempt++) {
             run.checkActive();
             progress.accept(event("vue_build", "项目构建", "running", "正在安装依赖并执行真实构建", attempt));
-            BuildResult result = builder.buildDetailed(run.root(), run);
+            BuildResult result = run.traceBuild(com.xhl.aicodegenerate.observability.TraceSession.Kind.BUILD,
+                    "vue_build", () -> builder.buildDetailed(run.root(), run));
             if (result.success()) {
                 progress.accept(event("vue_build", "项目构建", "completed", "真实构建已通过", attempt));
                 progress.accept(event("preview_check", "预览检查", "running", "正在检查入口、资源与 Vue 挂载", attempt));
-                result = verifier.verify(run.root(), true, run);
+                result = run.traceBuild(com.xhl.aicodegenerate.observability.TraceSession.Kind.PREVIEW,
+                        "preview_check", () -> verifier.verify(run.root(), true, run));
                 if (result.success()) {
                     progress.accept(event("preview_check", "预览检查", "completed", "预览检查已通过", attempt)); return;
                 }
@@ -43,7 +45,7 @@ public class VueDeliveryService {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, "Vue 交付失败：" + diagnostic);
             }
             progress.accept(event("vue_repair", "定向修复", "retrying", "依据真实诊断执行第 " + (attempt + 1) + " 轮修复", attempt + 1));
-            repairer.repair(memoryId, diagnostic, output);
+            run.traceAction("vue_repair", () -> repairer.repair(memoryId, diagnostic, output));
             run.checkActive();
         }
     }

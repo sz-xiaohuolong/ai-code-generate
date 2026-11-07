@@ -1,0 +1,29 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "text",
+      "selector": "[data-testid=\"count\"]",
+      "expected": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"increment\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"count\"]",
+      "expected": "1"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"reset\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"count\"]",
+      "expected": "0"
+    }
+  ],
+  "engineering": null
+}

@@ -17,6 +17,7 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("*");
+                // 携带 Cookie 时浏览器不将通配符视为全部响应头，调用方所需字段必须显式列出。
+                .exposedHeaders("*", "X-Request-Id", "Content-Disposition");
     }
 }

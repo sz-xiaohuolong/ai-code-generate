@@ -1,0 +1,4 @@
+<script setup>
+import {ref,computed} from "vue";const name=ref("");const tasks=ref([]);const filter=ref("all");const visible=computed(()=>tasks.value.filter(t=>filter.value!=="done"||t.done));function add(){if(name.value.trim()){tasks.value.push({id:tasks.value.length+1,name:name.value.trim(),done:false});name.value=""}}
+</script>
+<template><h1>任务管理</h1><form @submit.prevent="add"><label>任务<input data-testid="task-input" v-model="name" required></label><button data-testid="add-task">新增任务</button></form><ul data-testid="task-list"><li v-for="t in visible" :key="t.id" data-testid="task-row" :data-status="t.done?'done':'open'"><input type="checkbox" data-testid="task-complete" v-model="t.done"><span data-testid="task-name">{{t.name}}</span></li></ul></template>

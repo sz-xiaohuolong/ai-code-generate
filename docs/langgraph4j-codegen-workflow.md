@@ -1,6 +1,6 @@
 # LangGraph4j 工作流特性实战开发说明
 
-本文档描述当前工作流模式的图编排、状态、记忆与流式协议。产品决策与验证分别以 `docs/vibe/releases/p0-reliability/SPEC.md` 和 `VERIFICATION.md` 为准。
+本文档描述当前工作流模式的图编排、状态、记忆与流式协议。产品决策与验证分别以 `docs/vibe/phase/2026-10-18-p0-reliability/SPEC.md` 和 `VERIFICATION.md` 为准。
 
 顶部选择只影响新建应用，`app.generationMode` 在创建后固定。两种模式共用应用工作台与聊天入口，代码类型 HTML／MULTI_FILE／VUE_PROJECT 与模式独立。
 
@@ -265,4 +265,4 @@ Vue 在 `ProjectBuilderNode` 调用共享交付：真实 npm 构建、分类诊�
 
 整体上，这次改动没有替换原有 `AiCodeGeneratorFacade`、`CodeGenTypeEnum`、保存路径规则或 Vue 构建器，只是在 LangGraph4j 编排层增加了特性节点和边。
 
-P0 的真实 Redis、Node、Vue 编译器、Chrome、故障修复和任务恢复验收，以 [VERIFICATION.md](vibe/releases/p0-reliability/VERIFICATION.md) 为准。
+P0 的真实 Redis、Node、Vue 编译器、Chrome、故障修复和任务恢复验收，以 [VERIFICATION.md](vibe/phase/2026-10-18-p0-reliability/VERIFICATION.md) 为准。

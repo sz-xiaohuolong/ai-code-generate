@@ -42,24 +42,24 @@ public class FileModifyTool extends BaseTool {
             String newContent,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        return FileToolSupport.execute(memoryId, relativeFilePath, path -> {
+        return FileToolSupport.execute(memoryId, getToolName(), relativeFilePath, path -> {
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
-                return "错误：文件不存在或不是文件 - " + relativeFilePath;
+                return FileToolSupport.Outcome.failed("错误：文件不存在或不是文件 - " + relativeFilePath);
             }
             String originalContent = Files.readString(path);
-            if (oldContent == null || oldContent.isEmpty()) return "错误：修改内容必须非空且唯一匹配";
+            if (oldContent == null || oldContent.isEmpty()) return FileToolSupport.Outcome.failed("错误：修改内容必须非空且唯一匹配");
             if (!originalContent.contains(oldContent)) {
-                return "警告：文件中未找到要替换的内容，文件未修改 - " + relativeFilePath;
+                return FileToolSupport.Outcome.failed("警告：文件中未找到要替换的内容，文件未修改 - " + relativeFilePath);
             }
             if (originalContent.indexOf(oldContent) != originalContent.lastIndexOf(oldContent))
-                return "错误：旧内容必须唯一匹配，文件未修改";
+                return FileToolSupport.Outcome.failed("错误：旧内容必须唯一匹配，文件未修改");
             String modifiedContent = originalContent.replace(oldContent, newContent);
             if (originalContent.equals(modifiedContent)) {
-                return "信息：替换后文件内容未发生变化 - " + relativeFilePath;
+                return FileToolSupport.Outcome.skipped("信息：替换后文件内容未发生变化 - " + relativeFilePath);
             }
             Files.writeString(path, modifiedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             log.info("成功修改文件: {}", path.toAbsolutePath());
-            return "文件修改成功: " + relativeFilePath;
+            return FileToolSupport.Outcome.success("文件修改成功: " + relativeFilePath);
         });
     }
 }

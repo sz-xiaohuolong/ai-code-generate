@@ -15,6 +15,30 @@ import static org.junit.jupiter.api.Assertions.*;
 class FileToolSafetyTest {
     @TempDir Path outside;
 
+    @Test void traceRecordsOutcomesWithoutReadingBodyAsAnErrorOrSavingIt() throws Exception {
+        var steps = new java.util.concurrent.CopyOnWriteArrayList<com.xhl.aicodegenerate.entity.GenerationTraceStep>();
+        Files.writeString(outside.resolve("content.txt"), "错误：这只是文件正文 secret-value");
+        try (var recorder = new com.xhl.aicodegenerate.observability.GenerationTraceRecorder((trace, step) -> {
+            if (step != null) { steps.removeIf(old -> old.getSpanId().equals(step.getSpanId())); steps.add(step); }
+        }, java.time.Clock.systemUTC(), 64);
+             var run = new GenerationExecution("file-trace", outside, java.time.Duration.ofSeconds(5), () -> true)) {
+            run.attachTrace(recorder.startGeneration(run.id(), 1L, 1L, "standard", "vue_project"));
+            var id = new AppChatMemoryId(1L, 1L, run.id());
+            var reader = new com.xhl.aicodegenerate.ai.tools.FileReadTool();
+            assertTrue(reader.readFile("content.txt", id).contains("secret-value"));
+            reader.readFile("missing.txt", id);
+            new FileWriteTool().writeFile("../escape.txt", "secret-value", id);
+            assertTrue(recorder.awaitIdle(java.time.Duration.ofSeconds(2)));
+            assertEquals(3, steps.size());
+            assertEquals("SUCCEEDED", steps.get(0).getStatus());
+            assertEquals("FAILED", steps.get(1).getStatus());
+            assertEquals("FAILED", steps.get(2).getStatus());
+            assertTrue(steps.get(0).getSafeMetadata().contains("readFile"));
+            assertFalse(steps.toString().contains("secret-value"));
+            assertFalse(steps.toString().contains("../escape.txt"));
+        }
+    }
+
     @Test
     void absolutePathMustNotWriteOutsideApplication() throws Exception {
         Path target = outside.resolve("outside.txt");

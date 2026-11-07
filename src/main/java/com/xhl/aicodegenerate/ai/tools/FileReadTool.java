@@ -37,11 +37,11 @@ public class FileReadTool extends BaseTool {
             String relativeFilePath,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        return FileToolSupport.execute(memoryId, relativeFilePath, path -> {
+        return FileToolSupport.execute(memoryId, getToolName(), relativeFilePath, path -> {
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
-                return "错误：文件不存在或不是文件 - " + relativeFilePath;
+                return FileToolSupport.Outcome.failed("错误：文件不存在或不是文件 - " + relativeFilePath);
             }
-            return Files.readString(path);
+            return FileToolSupport.Outcome.success(Files.readString(path));
         });
     }
 }

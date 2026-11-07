@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "text",
+      "selector": "[data-testid=\"count\"]",
+      "expected": "0"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"increment\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"count\"]",
+      "expected": "1"
+    }
+  ],
+  "engineering": "NATIVE_REGEN"
+}

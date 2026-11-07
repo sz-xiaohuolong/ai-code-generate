@@ -59,6 +59,7 @@ import { CODE_GEN_TYPE_CONFIG, CodeGenTypeEnum } from '@/constants/codeGenType'
 import AppChatComposer from '@/components/AppChatComposer.vue'
 import KnowledgeReferences from '@/components/KnowledgeReferences.vue'
 import { nextKnowledgeRequest, readKnowledgeRequest, takeFirstKnowledgeRequest, type KnowledgeRequest } from '@/utils/knowledgeRequest'
+import GenerationTracePanel from '@/components/GenerationTracePanel.vue'
 import {
   GENERATION_MODE_LABELS,
   normalizeGenerationMode,
@@ -97,6 +98,7 @@ const deploying = ref(false)
 const downloading = ref(false)
 const deleting = ref(false)
 const detailModalVisible = ref(false)
+const tracePanelVisible = ref(false)
 const previewVisible = ref(false)
 const previewFrameRef = ref<HTMLIFrameElement | null>(null)
 const editMode = ref(false)
@@ -170,7 +172,8 @@ const canOperate = computed(() => {
 })
 
 const isOwnApp = computed(() => {
-  return String(appInfo.value.userId) === String(loginUser.value.id)
+  return !!loginUser.value.id && !!appInfo.value.userId && String(appInfo.value.id) === appId.value
+    && String(appInfo.value.userId) === String(loginUser.value.id)
 })
 
 const creatorName = computed(() => {
@@ -809,6 +812,9 @@ onBeforeUnmount(() => {
         <div class="topbar-divider" />
 
         <div class="action-btn-group">
+          <button v-if="isOwnApp" type="button" class="ghost-text-btn" :aria-expanded="tracePanelVisible" aria-controls="generation-trace-panel" @click="tracePanelVisible = !tracePanelVisible">
+            <span>生成记录</span>
+          </button>
           <button type="button" class="ghost-text-btn" @click="detailModalVisible = true">
             <InfoCircleOutlined />
             <span>详情</span>
@@ -836,6 +842,15 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </header>
+
+    <GenerationTracePanel
+      v-if="isOwnApp && tracePanelVisible"
+      id="generation-trace-panel"
+      :app-id="appId"
+      :task-id="activeTask?.id"
+      :task-active="generating"
+      @close="tracePanelVisible = false"
+    />
     <div v-if="generating" class="generation-task-status" role="status">
       <SyncOutlined spin />
       <strong>{{ activeTask?.stage || '正在创建任务' }}</strong>
@@ -2139,9 +2154,19 @@ onBeforeUnmount(() => {
 
   .section-center {
     order: 3;
+    flex: 0 0 100%;
     width: 100%;
     justify-content: flex-start;
     margin-top: 6px;
+  }
+
+  .section-right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .action-btn-group {
+    flex-wrap: wrap;
   }
 
   .workspace {

@@ -8,6 +8,9 @@ import com.xhl.aicodegenerate.exception.BusinessException;
 import com.xhl.aicodegenerate.exception.ErrorCode;
 import com.xhl.aicodegenerate.model.enums.GenerationModeEnum;
 import com.xhl.aicodegenerate.service.AppService;
+import com.xhl.aicodegenerate.observability.GenerationTraceRecorder;
+import com.xhl.aicodegenerate.observability.TraceSession;
+import com.xhl.aicodegenerate.observability.TraceArtifacts;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,18 +30,24 @@ public class GenerationTaskService implements AutoCloseable {
     private final AppService apps;
     private final GenerationTaskRunner runner;
     private final Duration budget;
+    private final GenerationTraceRecorder traces;
     private final ConcurrentMap<String, Running> running = new ConcurrentHashMap<>();
     private final ScheduledExecutorService monitor = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("generation-monitor").factory());
     private volatile boolean shutdown;
     private final ScheduledExecutorService historyMonitor = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("generation-history").factory());
 
     @Autowired public GenerationTaskService(RedisTaskStore store, GenerationWorkspace workspace, AppService apps,
-            GenerationTaskRunner runner, @Value("${generation.task-timeout-minutes:20}") int minutes) {
-        this(store, workspace, apps, runner, Duration.ofMinutes(minutes));
+            GenerationTaskRunner runner, @Value("${generation.task-timeout-minutes:20}") int minutes, GenerationTraceRecorder traces) {
+        this(store, workspace, apps, runner, Duration.ofMinutes(minutes), traces);
     }
     GenerationTaskService(RedisTaskStore store, GenerationWorkspace workspace, AppService apps,
             GenerationTaskRunner runner, Duration budget) {
+        this(store, workspace, apps, runner, budget, null);
+    }
+    public GenerationTaskService(RedisTaskStore store, GenerationWorkspace workspace, AppService apps,
+            GenerationTaskRunner runner, Duration budget, GenerationTraceRecorder traces) {
         this.store = store; this.workspace = workspace; this.apps = apps; this.runner = runner; this.budget = budget;
+        this.traces = traces;
         monitor.scheduleWithFixedDelay(this::tick, 100, 100, TimeUnit.MILLISECONDS);
         historyMonitor.scheduleWithFixedDelay(this::reconcileHistory, 1, 1, TimeUnit.SECONDS);
     }
@@ -74,6 +83,10 @@ public class GenerationTaskService implements AutoCloseable {
         GenerationExecution execution = new GenerationExecution(task.getId(), workspace.taskRoot(appId, task.getId()), budget,
                 () -> store.owns(appId, task.getId()) && !store.stopRequested(task.getId()), app.getInitPrompt());
         if (useKnowledge) execution.requireKnowledge();
+        if (traces != null && traces.isEnabled()) {
+            execution.attachTrace(traces.startGeneration(task.getId(), appId, user.getId(), task.getGenerationMode(), task.getCodeGenType()));
+            task.setTraceId(execution.trace().traceId());
+        }
         Running active = new Running(task, execution);
         execution.observe(value -> append(active, value), event -> progress(active, event));
         Thread worker = Thread.ofVirtual().name("generation-task-" + task.getId()).unstarted(() -> execute(active));
@@ -87,6 +100,8 @@ public class GenerationTaskService implements AutoCloseable {
         ownedApp(task.getAppId(), user);
         if (!running.containsKey(id)) task = store.recoverInterrupted(task);
         if (task == null) throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "任务记录不存在");
+        Running active = running.get(id);
+        if (active != null) task.setTraceId(active.task.getTraceId());
         if (!task.getStatus().terminal() && store.stopRequested(id)) {
             task.setStatus(TaskStatus.STOPPING); task.setStage("正在停止"); task.setMessage("正在停止模型、文件操作和构建进程");
         }
@@ -103,7 +118,10 @@ public class GenerationTaskService implements AutoCloseable {
         if (!task.getStatus().terminal()) {
             store.requestStop(id);
             Running active = running.get(id);
-            if (active != null) Thread.ofVirtual().start(() -> cancel(active, "用户主动停止"));
+            if (active != null) {
+                recordStop(active);
+                Thread.ofVirtual().start(() -> cancel(active, "用户主动停止"));
+            }
         }
         return get(id, user);
     }
@@ -128,7 +146,8 @@ public class GenerationTaskService implements AutoCloseable {
         GenerationTask task = active.task;
         TaskStatus finalStatus = TaskStatus.SUCCEEDED;
         String resultMessage = "生成与交付检查已完成";
-        try {
+        TraceSession.Step generation = active.execution.traceStep(TraceSession.Kind.STAGE, "generation");
+        try (var ignored = (generation == null ? active.execution.traceContext() : generation.context()).makeCurrent()) {
             active.execution.checkActive(); workspace.prepare(task); active.execution.checkActive();
             for (String id : store.pendingHistory()) {
                 GenerationTask previous = store.historyTask(id);
@@ -141,6 +160,7 @@ public class GenerationTaskService implements AutoCloseable {
             synchronized (task) { task.setStatus(TaskStatus.RUNNING); task.setStage("代码生成"); task.setMessage("正在生成代码"); changed(active); }
             runner.run(task, active.execution, value -> append(active, value), progress -> progress(active, progress));
             active.execution.assertGenerationAllowed();
+            if (generation != null) generation.succeed();
         } catch (Throwable error) {
             // 模型包装异常可能保留中断标记；先清除，才能读取已持久化的停止意图。
             Thread.interrupted();
@@ -149,6 +169,10 @@ public class GenerationTaskService implements AutoCloseable {
             try { stopped = store.stopRequested(task.getId()); } catch (RuntimeException ignored) { }
             finalStatus = timedOut ? TaskStatus.TIMED_OUT : stopped ? TaskStatus.CANCELLED : shutdown ? TaskStatus.INTERRUPTED : TaskStatus.FAILED;
             resultMessage = timedOut ? "已达到生成任务总时限" : stopped ? "生成已停止，上次成功版本已保留" : safeMessage(error, active.execution);
+            if (generation != null) {
+                if (stopped || timedOut || shutdown) generation.cancel(); else generation.fail(error);
+                active.execution.trace().failure(error);
+            }
         } finally {
             Thread.interrupted();
             boolean cleaned = false;
@@ -169,8 +193,9 @@ public class GenerationTaskService implements AutoCloseable {
                 task.setMessage(resultMessage); changed(active);
                 if (finalStatus == TaskStatus.SUCCEEDED) task.setPreviewAvailable(true);
             }
+            boolean committed = false;
             try {
-                boolean committed = store.finish(task, false);
+                committed = store.finish(task, false);
                 if (!committed && finalStatus == TaskStatus.SUCCEEDED && store.stopRequested(task.getId())) {
                     synchronized (task) { task.setStatus(TaskStatus.CANCELLED); task.setMessage("生成已停止，上次成功版本已保留");
                         task.setPreviewAvailable(workspace.hasPreview(task.getAppId(), task.getCodeGenType())); changed(active); }
@@ -184,7 +209,10 @@ public class GenerationTaskService implements AutoCloseable {
                     }
                     historyMonitor.execute(() -> recordHistory(task.getId()));
                 }
-            } finally { running.remove(task.getId(), active); }
+            } finally {
+                finishTrace(active, committed);
+                running.remove(task.getId(), active);
+            }
         }
     }
 
@@ -217,6 +245,26 @@ public class GenerationTaskService implements AutoCloseable {
     private void changed(Running active) {
         active.task.setUpdatedAt(System.currentTimeMillis()); active.task.setRevision(active.task.getRevision() + 1); active.dirty.set(true);
     }
+
+    private void recordStop(Running active) {
+        if (active.execution.trace() != null && active.stopRecorded.compareAndSet(false, true)) {
+            active.execution.traceStep(TraceSession.Kind.STOP, "stop_requested").succeed();
+        }
+    }
+
+    private void finishTrace(Running active, boolean committed) {
+        TraceSession trace = active.execution.trace();
+        if (trace == null) return;
+        if (!committed) trace.markPartial();
+        if (committed && active.task.getStatus() == TaskStatus.SUCCEEDED) {
+            try {
+                trace.artifact(active.task.getAppId() + "/" + active.task.getId(), TraceArtifacts.digest(active.execution.root()));
+            } catch (java.io.IOException | RuntimeException error) {
+                trace.markPartial();
+            }
+        }
+        trace.finish(committed ? active.task.getStatus().name() : "UNKNOWN");
+    }
     private GenerationTask copy(GenerationTask task) { synchronized (task) { return JSONUtil.toBean(JSONUtil.toJsonStr(task), GenerationTask.class); } }
     private void tick() {
         for (Running active : running.values()) {
@@ -226,7 +274,7 @@ public class GenerationTaskService implements AutoCloseable {
                     active.lastRenew = System.nanoTime();
                 }
                 if (System.currentTimeMillis() >= active.task.getDeadlineAt()) { cancel(active, "已达到任务总时限"); continue; }
-                if (store.stopRequested(active.task.getId())) { cancel(active, "用户主动停止"); continue; }
+                if (store.stopRequested(active.task.getId())) { recordStop(active); cancel(active, "用户主动停止"); continue; }
                 if (!active.committing && active.dirty.compareAndSet(true, false) && !store.save(copy(active.task))) cancel(active, "任务执行权已失效");
             } catch (RuntimeException error) { cancel(active, "任务状态存储不可用"); }
         }
@@ -262,6 +310,7 @@ public class GenerationTaskService implements AutoCloseable {
     private static final class Running {
         final GenerationTask task; final GenerationExecution execution; final AtomicBoolean dirty = new AtomicBoolean(true);
         final AtomicBoolean cancelDispatched = new AtomicBoolean();
+        final AtomicBoolean stopRecorded = new AtomicBoolean();
         volatile boolean committing;
         volatile Thread worker; volatile long lastRenew = System.nanoTime();
         Running(GenerationTask task, GenerationExecution execution) { this.task = task; this.execution = execution; }

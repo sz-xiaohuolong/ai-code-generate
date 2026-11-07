@@ -1,0 +1,68 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"task-input\"]",
+      "value": "评测任务"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"add-task\"]"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"task-row\"]",
+      "expected": "1"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"task-row\"] [data-testid=\"task-name\"]",
+      "expected": "评测任务"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"task-complete\"]"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"task-row\"][data-status=\"done\"]",
+      "expected": "1"
+    },
+    {
+      "action": "select",
+      "selector": "[data-testid=\"task-filter\"]",
+      "value": "done"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"task-row\"]",
+      "expected": "1"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"task-input\"]",
+      "value": "未完成任务"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"add-task\"]"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"task-row\"]",
+      "expected": "1"
+    },
+    {
+      "action": "select",
+      "selector": "[data-testid=\"task-filter\"]",
+      "value": "all"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"task-row\"]",
+      "expected": "2"
+    }
+  ],
+  "engineering": null
+}

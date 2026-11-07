@@ -54,10 +54,10 @@ public class FileDirReadTool extends BaseTool {
             String relativeDirPath,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        return FileToolSupport.execute(memoryId, relativeDirPath, path -> {
+        return FileToolSupport.execute(memoryId, getToolName(), relativeDirPath, path -> {
             File targetDir = path.toFile();
             if (!targetDir.exists() || !targetDir.isDirectory()) {
-                return "错误：目录不存在或不是目录 - " + relativeDirPath;
+                return FileToolSupport.Outcome.failed("错误：目录不存在或不是目录 - " + relativeDirPath);
             }
             StringBuilder structure = new StringBuilder();
             structure.append("项目目录结构:\n");
@@ -69,7 +69,7 @@ public class FileDirReadTool extends BaseTool {
                                 .noneMatch(part -> shouldIgnore(part.toString())))
                         .limit(500).sorted().forEach(p -> structure.append(path.relativize(p)).append("\n"));
             }
-            return structure.toString();
+            return FileToolSupport.Outcome.success(structure.toString());
 
         });
     }

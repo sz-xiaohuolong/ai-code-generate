@@ -85,13 +85,13 @@ public class ImageCollectorNode {
         KrokiMermaidDiagramTool diagramTool = SpringContextUtil.getBean(KrokiMermaidDiagramTool.class);
 
         for (ImageCollectionPlan.ImageSearchTask task : normalizedPlan.getContentImageTasks()) {
-            futures.add(supply(run, () -> imageSearchTool.searchContentImages(task.query())));
+            futures.add(supply(run, "searchContentImages", () -> imageSearchTool.searchContentImages(task.query())));
         }
         for (ImageCollectionPlan.LogoTask task : normalizedPlan.getLogoTasks()) {
-            futures.add(supply(run, () -> logoTool.generateLogos(task.description(), appId)));
+            futures.add(supply(run, "generateLogos", () -> logoTool.generateLogos(task.description(), appId)));
         }
         for (ImageCollectionPlan.DiagramTask task : normalizedPlan.getDiagramTasks()) {
-            futures.add(supply(run, () ->
+            futures.add(supply(run, "generateMermaidDiagram", () ->
                     diagramTool.generateMermaidDiagram(task.mermaidCode(), task.description(), appId)));
         }
 
@@ -112,8 +112,9 @@ public class ImageCollectorNode {
     }
 
     private static <T> CompletableFuture<T> supply(com.xhl.aicodegenerate.generation.GenerationExecution run,
-                                                   java.util.function.Supplier<T> action) {
-        return run == null ? CompletableFuture.supplyAsync(action) : run.fork(action);
+                                                   String name, java.util.function.Supplier<T> action) {
+        return run == null ? CompletableFuture.supplyAsync(action)
+                : run.fork(() -> run.traceCall(com.xhl.aicodegenerate.observability.TraceSession.Kind.TOOL, name, action));
     }
     static String formatImageList(List<ImageResource> imageList) {
         if (imageList == null || imageList.isEmpty()) {

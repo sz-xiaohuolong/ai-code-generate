@@ -37,21 +37,21 @@ public class FileDeleteTool extends BaseTool {
             String relativeFilePath,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        return FileToolSupport.execute(memoryId, relativeFilePath, path -> {
+        return FileToolSupport.execute(memoryId, getToolName(), relativeFilePath, path -> {
             if (!Files.exists(path)) {
-                return "警告：文件不存在，无需删除 - " + relativeFilePath;
+                return FileToolSupport.Outcome.skipped("警告：文件不存在，无需删除 - " + relativeFilePath);
             }
             if (!Files.isRegularFile(path)) {
-                return "错误：指定路径不是文件，无法删除 - " + relativeFilePath;
+                return FileToolSupport.Outcome.failed("错误：指定路径不是文件，无法删除 - " + relativeFilePath);
             }
             // 安全检查：避免删除重要文件
             String fileName = path.getFileName().toString();
             if (isImportantFile(fileName)) {
-                return "错误：不允许删除重要文件 - " + fileName;
+                return FileToolSupport.Outcome.failed("错误：不允许删除重要文件 - " + fileName);
             }
             Files.delete(path);
             log.info("成功删除文件: {}", path.toAbsolutePath());
-            return "文件删除成功: " + relativeFilePath;
+            return FileToolSupport.Outcome.success("文件删除成功: " + relativeFilePath);
         });
     }
 

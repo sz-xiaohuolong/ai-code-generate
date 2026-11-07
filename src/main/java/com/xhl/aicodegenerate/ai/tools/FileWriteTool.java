@@ -60,7 +60,7 @@ public class FileWriteTool extends BaseTool {
             String content,
             @ToolMemoryId AppChatMemoryId memoryId
     ) {
-        return FileToolSupport.execute(memoryId, relativeFilePath, path -> {
+        return FileToolSupport.execute(memoryId, getToolName(), relativeFilePath, path -> {
             // 创建父目录（如果不存在）
             Path parentDir = path.getParent();
             if (parentDir != null) {
@@ -72,7 +72,7 @@ public class FileWriteTool extends BaseTool {
                     StandardOpenOption.TRUNCATE_EXISTING);
             log.info("成功写入文件: {}", path.toAbsolutePath());
             // 注意要返回相对路径，不能让 AI 把文件绝对路径返回给用户
-            return "文件写入成功: " + relativeFilePath + "。若所有必要文件已经写入完成，请停止调用工具并输出生成完毕提示。";
+            return FileToolSupport.Outcome.success("文件写入成功: " + relativeFilePath + "。若所有必要文件已经写入完成，请停止调用工具并输出生成完毕提示。");
         });
     }
 }

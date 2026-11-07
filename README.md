@@ -381,7 +381,15 @@ mysql -uroot -p < sql/create_table.sql
 mysql -uroot -p < sql/migrations/20261018_generation_mode.sql
 ```
 
-历史应用自动归为标准模式。回退旧代码可以保留该列；恢复新版前避免用旧代码继续编辑工作流应用。需求与验证记录见 [generation-modes](docs/vibe/releases/generation-modes/SPEC.md)。
+历史应用自动归为标准模式。回退旧代码可以保留该列；恢复新版前避免用旧代码继续编辑工作流应用。需求与验证记录见 [generation-modes](docs/vibe/phase/2026-10-18-generation-modes/SPEC.md)。
+
+启用创建／生成过程追踪时，已有库还需在选定业务库执行以下幂等迁移；新初始化脚本已包含两张追踪表：
+
+```bash
+mysql -h 127.0.0.1 -u <数据库用户> -p <业务库名> < sql/migrations/20261107_generation_trace.sql
+```
+
+追踪仅供应用所有者查询，保留 7 天；采集失败不阻断正常生成。接口与禁用方式见 [追踪 API](docs/vibe/API.md)。
 
 ### 2️⃣ 配置 LLM 与本地环境
 
@@ -402,6 +410,8 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 
 后端启动于 **http://localhost:8123/api**，接口文档见下方。
 
+后端默认关闭 DevTools 自动重启，避免编译／测试更新 class 文件时反复重启并累积失败恢复监听器。代码修改后需手动重启后端；仅在需要热重启的开发场景，可通过应用启动参数 `--spring.devtools.restart.enabled=true` 临时开启。此配置不影响前端 Vite 热更新，也不等同于完全禁用 DevTools 重启类加载器。
+
 ### 4️⃣ 启动前端
 
 ```bash
@@ -419,6 +429,17 @@ yarn dev          # Vite dev server（HMR）
 ./mvnw test -Dtest=XxxTest  # 单个测试类
 ./mvnw package -DskipTests  # 打包 JAR
 ```
+
+### 生成质量独立评测
+
+维护者可以在专用 MySQL 库及独立运行目录中评测固定场景。命令会创建专属 Redis 进程，复用真实生成、构建和 Chrome 检查，不需要启动网站后端。先按 [人工验收说明](docs/vibe/phase/2026-11-07-generation-observability-evaluation/VERIFICATION.md#62-受控评测报告与比较) 准备依赖及 `EVAL_JDBC_*` 配置，再执行：
+
+```bash
+./scripts/evaluate.sh --mode fixture --suite all --output .evidence/evaluation
+./scripts/evaluate.sh compare --baseline '<第一次运行目录>' --candidate '<第二次运行目录>'
+```
+
+默认 fixture 使用受控模型响应与外部素材，覆盖 24 条用例（18 开发／6 留出），导出 JSON、HTML、固定产物与截图。报告分别列出生成终态、业务断言、工程故障预期和用量缺口；受控 PASS 不代表真实模型质量。真实评测必须显式选择 live 并设置调用上限、总时限及专用模型配置；[完整说明与已执行验证](docs/vibe/phase/2026-11-07-generation-observability-evaluation/VERIFICATION.md) 区分本地证据和维护者待执行项。
 
 ### ⚙️ 常用脚本（前端）
 

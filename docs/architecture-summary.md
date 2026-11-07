@@ -211,7 +211,7 @@ flowchart TD
 
 节点观察器在真实执行前后发送 `running/completed/retrying/skipped/failed`。生成阶段只落盘；Vue 在质检结束后进入共享构建／最多两轮定向修复，静态页面显式跳过 npm 构建，仍须通过浏览器检查。质检异常记录跳过原因，重试耗尽、生成失败和构建失败阻断成功状态。
 
-内部增强与重试使用从正式历史初始化的临时记忆，正式历史只记录一次原始用户输入及最终结果。取消会中断等待线程并向真实 TokenStream 传播取消，阻止后续节点与迟到构建。前端以任务成功快照切换预览。新任务、失败和取消期间保留最近成功版本；标准模式展示简要状态，工作流展示具体步骤和重试。
+内部增强与重试使用从正式历史初始化的临时记忆，正式历史只记录一次原始用户输入及最终结果。Vue 构建修复在任务开始前固定应用初始需求、已有用户要求和本轮要求；修复模型的临时记忆持续携带需求、源码状态与构建诊断，工具历史仍按窗口管理。空业务源码时补齐完整工程，已有源码时优先局部修复；缺失需求上下文则停止修复。取消会中断等待线程并向真实 TokenStream 传播取消，阻止后续节点与迟到构建。前端以任务成功快照切换预览。新任务、失败和取消期间保留最近成功版本；标准模式展示简要状态，工作流展示具体步骤和重试。
 
 ## 6. 前端架构
 
@@ -271,22 +271,34 @@ flowchart TB
 1. **双代码生成链路**：标准模式（按 App 代码类型直连 AI 服务）与工作流模式（LangGraph4j 图编排）共用后台任务入口；工作流节点刻意**复用** `AiCodeGeneratorFacade`、`VueProjectBuilder`、`AiCodeGenTypeRoutingService` 等现有组件，而不是重写。
 2. **策略/模板模式**：`CodeParserExecutor`、`CodeFileSaverExecutor`、`StreamHandlerExecutor` 都按 `CodeGenTypeEnum` 分派到具体实现；保存器基于模板方法（`CodeFileSaverTemplate`）。
 3. **声明式 AI 服务**：`AiCodeGeneratorService` 等接口由 LangChain4j `AiServices` 在运行时生成动态代理，提示词放在 `src/main/resources/prompt/`；`VUE_PROJECT` 模式额外挂载文件读写工具（最多 20 次顺序工具调用），并切换到推理型流式模型。
-4. **容错兜底**：结构化输出解析失败 → 走无记忆 raw 文本 + 本地 `CodeParser` 解析；工作流路由失败默认 HTML；质检失败最多重试 2 次；质检服务异常显式标记跳过后放行。
+4. **容错兜底**：专用路由模型调用失败时回退现有主模型，输入护轨拒绝不触发回退；两者均失败时创建接口返回明确业务提示，不写入应用。结构化输出解析失败 → 走无记忆 raw 文本 + 本地 `CodeParser` 解析；工作流路由失败默认 HTML；质检失败最多重试 2 次；质检服务异常显式标记跳过后放行。原生 HTML／多文件在覆盖文件前检查完整文档及所引用的 CSS／JS，缺失时同一任务内最多完整重生成一次，不注入通用占位资源；取消和总时限限制继续生效。DeepSeek HTML／多文件流式配置关闭推理，并为完整文件预留输出预算，避免推理耗尽预算或正文截断；配置示例见 `application-local.yml.example`，Vue 专用推理模型独立配置。
 5. **记忆一致性**：ChatMemory 采用"DB 事实源 + Redis 缓存"，`AppChatMemoryId(appId, userId, taskId)` 显式传递本轮上下文；任务使用临时记忆，终态正式历史按稳定主键事务补记并刷新缓存；工具调用产生的运行时消息（ToolExecutionResult 等）不落业务历史表。
 6. **鉴权**：后端 `@AuthCheck(mustRole=ADMIN_ROLE)` + AOP 拦截；前端路由守卫双保险；App 归属校验（本人或管理员）在 Service/Controller 层。
 7. **可观测/文档**：Knife4j（`/api/doc.html`）；前端 API 客户端由 `yarn openapi2ts` 从 OpenAPI 规范自动生成。
-8. **工具上下文裁剪**：Vue 服务在 `AiCodeGeneratorServiceFactory` 通过 `chatRequestTransformer` 接入无状态的 `ToolContextPruner`，标准、工作流和修复共用。仅在请求副本中精简完整成功组的大段写入／修改参数、同文件较早的读取结果及已知旧写文件展示块；保留每文件最新读取、错误、推理字段、ID 配对、工具定义和请求参数。原始执行参数、文件、记忆与前端完整展示不变；短正文、未知格式和不安全工具组不裁剪。摘要不等于构建成功，也不替代既有轮数与时限保护；方案、测试接缝及验证边界见 [本次优化记录](vibe/tasks/2026-10-20-tool-context-pruning.md)。
+8. **工具上下文裁剪**：Vue 服务在 `AiCodeGeneratorServiceFactory` 通过 `chatRequestTransformer` 接入无状态的 `ToolContextPruner`，标准、工作流和修复共用。仅在请求副本中精简完整成功组的大段写入／修改参数、同文件较早的读取结果及已知旧写文件展示块；保留每文件最新读取、错误、推理字段、ID 配对、工具定义和请求参数。原始执行参数、文件、记忆与前端完整展示不变；短正文、未知格式和不安全工具组不裁剪。摘要不等于构建成功，也不替代既有轮数与时限保护；方案、测试接缝及验证边界见 [本次优化记录](vibe/phase/2026-10-20-tool-context-pruning/README.md)。
 
-## 9. 目录结构速览
+## 9. 生成追踪与独立评测
+
+创建请求由服务端分配请求编号，路由／回退各自记录模型步骤；创建成功后绑定应用。每个后台生成任务单独建立追踪，显式传递 OpenTelemetry 上下文，保留原生重生成、图节点、模型、工具、构建和预览的父子关系。取消后任务清理等待工作流线程退出，随后确认任务与追踪终态。实现入口为 `observability/`、`GenerationTaskService`、`UsageTrackingStreamingModel` 与 `CodeGenWorkflow`。
+
+`GenerationTraceRecorder` 以有界队列异步写入 MySQL 的 `generation_trace`／`generation_trace_step`，不向第三方导出。写入失败标 PARTIAL，正常生成仍按原交付规则运行。查询服务独立于 Redis，执行所有者鉴权、7 天过期及应用删除检查；创建关联未确认时不返回诊断详情。工作台的 `GenerationTracePanel.vue` 读取只读追踪 API，日常记录只保留白名单元数据。迁移及接口见 [API 调用说明](vibe/API.md)。
+
+`scripts/evaluate.sh` 编译独立的 `EvaluationMain`，使用显式 `EVAL_*` 配置、专用 MySQL 库、独立 Redis 进程和任务目录。数据集在 `evaluation/`，固定 24 条／18 开发与 6 留出。新建用例执行真实路由；修改用例准备固定类型、初始需求和初始产物。fixture 只替换模型协议与外部素材边界，真实生成、构建和 Selenium 浏览器断言继续执行；live 显式限定请求数与总时限。
+
+每次运行导出冻结输入、只读产物、逐用例 JSON、截图、JSON／HTML 报告，最后写完成清单及摘要。比较命令仅读取本地文件，分别判定质量、耗时和用量可比性；未上报 Token 保持未知。报告判定不回写正常应用的发布条件。当前实现及验证边界以 [阶段验收](vibe/phase/2026-11-07-generation-observability-evaluation/VERIFICATION.md) 为准，业务库迁移和付费供应商验收未执行。
+
+## 10. 目录结构速览
 
 ```
 ai-code-generate/
 ├── pom.xml                          # Spring Boot 3.5 / LangChain4j / LangGraph4j / MyBatis-Flex
-├── sql/create_table.sql             # user / app / chat_history
+├── sql/create_table.sql             # 用户、应用、聊天及两张追踪表
 ├── src/main/java/com/xhl/aicodegenerate/
 │   ├── controller/                  # App / User / ChatHistory / Static / Workflow / Health
 │   ├── service/ + service/impl/     # 业务逻辑
 │   ├── generation/                  # 后台任务、Redis 所有权、版本、Vue 交付与补记历史
+│   ├── observability/               # 独立追踪、白名单、MySQL 写入与恢复
+│   ├── evaluation/                  # 隔离命令、受控模型、浏览器断言与报告
 │   ├── core/                        # AiCodeGeneratorFacade + parser/ + saver/ + handler/ + builder/
 │   ├── ai/                          # LangChain4j 声明式服务 + 工厂 + 记忆存储 + 文件工具
 │   ├── langgraph4j/                 # CodeGenWorkflow + node/ + state/ + ai/ + tools/ + model/

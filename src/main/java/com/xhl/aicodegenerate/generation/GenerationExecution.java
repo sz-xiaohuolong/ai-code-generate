@@ -10,6 +10,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.Map;
 import dev.langchain4j.model.output.TokenUsage;
+import com.xhl.aicodegenerate.observability.TraceSession;
+import io.opentelemetry.context.Context;
 
 /** 本轮执行的截止时间、文件边界和取消资源，使用任务标识跨异步线程传递。 */
 public final class GenerationExecution implements AutoCloseable {
@@ -31,6 +33,7 @@ public final class GenerationExecution implements AutoCloseable {
     private int usageCalls;
     private Long inputTokens;
     private Long outputTokens;
+    private TraceSession trace;
     private boolean knowledgeRequired;
     private com.xhl.aicodegenerate.knowledge.KnowledgeContext knowledge;
 
@@ -57,11 +60,52 @@ public final class GenerationExecution implements AutoCloseable {
     public void output(String value) { checkActive(); output.accept(value); }
     public void progress(Map<String, Object> event) { checkActive(); progress.accept(event); }
     public synchronized void modelStarted() { checkActive(); modelCalls++; }
-    public synchronized void usage(TokenUsage usage) {
-        if (usage == null) return;
-        usageCalls++;
-        if (usage.inputTokenCount() != null) inputTokens = (inputTokens == null ? 0L : inputTokens) + usage.inputTokenCount();
-        if (usage.outputTokenCount() != null) outputTokens = (outputTokens == null ? 0L : outputTokens) + usage.outputTokenCount();
+    public synchronized void attachTrace(TraceSession trace) {
+        if (this.trace != null) throw new IllegalStateException("任务追踪已绑定");
+        this.trace = java.util.Objects.requireNonNull(trace);
+    }
+    public TraceSession trace() { return trace; }
+    public TraceSession.Step traceStep(TraceSession.Kind kind, String name) {
+        return trace == null ? null : trace.startStep(kind, name, trace.currentStep());
+    }
+    public Context traceContext() {
+        if (trace == null) return Context.current();
+        TraceSession.Step step = trace.currentStep();
+        return step == null ? trace.context() : step.context();
+    }
+
+    public void traceAction(String name, Runnable action) {
+        traceCall(TraceSession.Kind.STAGE, name, () -> { action.run(); return null; });
+    }
+
+    public <T> T traceCall(TraceSession.Kind kind, String name, java.util.function.Supplier<T> action) {
+        TraceSession.Step step = traceStep(kind, name);
+        if (step != null && kind == TraceSession.Kind.TOOL) step.metadata(Map.of("toolName", name));
+        try (var ignored = (step == null ? traceContext() : step.context()).makeCurrent()) {
+            T result = action.get();
+            if (step != null) step.succeed();
+            return result;
+        } catch (RuntimeException error) {
+            if (step != null) step.fail(error);
+            throw error;
+        }
+    }
+
+    public BuildResult traceBuild(TraceSession.Kind kind, String name, java.util.function.Supplier<BuildResult> action) {
+        TraceSession.Step step = traceStep(kind, name);
+        try (var ignored = (step == null ? traceContext() : step.context()).makeCurrent()) {
+            BuildResult result = action.get();
+            if (step != null) {
+                step.metadata(Map.of("buildKind", result.kind().name()));
+                if (result.success()) step.succeed();
+                else if (result.kind() == BuildResult.Kind.CANCELLED) step.cancel();
+                else step.fail(new IllegalStateException("交付检查未通过"));
+            }
+            return result;
+        } catch (RuntimeException error) {
+            if (step != null) step.fail(error);
+            throw error;
+        }
     }
     public ModelUsage newModelUsage() { return new ModelUsage(); }
 
@@ -158,8 +202,9 @@ public final class GenerationExecution implements AutoCloseable {
     public <T> CompletableFuture<T> fork(java.util.function.Supplier<T> action) {
         checkActive();
         var result = new CompletableFuture<T>();
+        Context captured = traceContext();
         Thread worker = Thread.ofVirtual().unstarted(() -> {
-            try { checkActive(); result.complete(action.get()); }
+            try (var ignored = captured.makeCurrent()) { checkActive(); result.complete(action.get()); }
             catch (Throwable error) { result.completeExceptionally(error); }
         });
         Runnable registration = onCancel(() -> {

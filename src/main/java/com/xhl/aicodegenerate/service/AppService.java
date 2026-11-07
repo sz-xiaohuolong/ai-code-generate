@@ -21,6 +21,8 @@ public interface AppService extends IService<App> {
 
     Long addApp(AppAddRequest appAddRequest,User loginUser);
 
+    Long addApp(AppAddRequest appAddRequest, User loginUser, String requestId);
+
     /**
      * 校验应用。
      *

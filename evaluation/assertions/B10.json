@@ -1,0 +1,53 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"signup-name\"]",
+      "value": "评测用户"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"signup-email\"]",
+      "value": "invalid"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"signup-submit\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"signup-result\"]",
+      "expected": ""
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"signup-submit\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"signup-result\"]",
+      "expected": ""
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"signup-name\"]",
+      "value": "评测用户"
+    },
+    {
+      "action": "fill",
+      "selector": "[data-testid=\"signup-email\"]",
+      "value": "test@example.invalid"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=\"signup-submit\"]"
+    },
+    {
+      "action": "text",
+      "selector": "[data-testid=\"signup-result\"]",
+      "expected": "报名成功"
+    }
+  ],
+  "engineering": null
+}

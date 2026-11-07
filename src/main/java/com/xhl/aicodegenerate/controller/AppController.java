@@ -75,7 +75,8 @@ public class AppController {
         ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        Long appId = appService.addApp(appAddRequest, loginUser);
+        String requestId = (String) request.getAttribute(com.xhl.aicodegenerate.observability.CreationRequestIdFilter.ATTRIBUTE);
+        Long appId = appService.addApp(appAddRequest, loginUser, requestId == null ? java.util.UUID.randomUUID().toString() : requestId);
         return ResultUtils.success(appId);
     }
     /**

@@ -1,0 +1,21 @@
+{
+  "version": "1",
+  "checks": [
+    {
+      "action": "select",
+      "selector": "[data-testid=\"order-filter\"]",
+      "value": "paid"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"order-row\"]",
+      "expected": "2"
+    },
+    {
+      "action": "count",
+      "selector": "[data-testid=\"order-row\"][data-status=\"pending\"]",
+      "expected": "0"
+    }
+  ],
+  "engineering": null
+}

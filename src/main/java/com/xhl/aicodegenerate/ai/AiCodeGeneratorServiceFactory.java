@@ -8,6 +8,7 @@ import com.xhl.aicodegenerate.mapper.ChatHistoryMapper;
 import com.xhl.aicodegenerate.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.guardrail.InputGuardrailException;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
@@ -15,6 +16,7 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -34,12 +36,13 @@ import org.springframework.context.annotation.Primary;
  * </p>
  */
 @Configuration
+@Slf4j
 public class AiCodeGeneratorServiceFactory {
 
     /**
      * AI 对话记忆最多保留的消息数，和 DatabaseLoadingChatMemoryStore 从 DB 恢复的条数保持一致。
      */
-    private static final int CHAT_MEMORY_MAX_MESSAGES = 20;
+    private static final int CHAT_MEMORY_MAX_MESSAGES = 40;
 
     /**
      * Vue 工程模式会让模型连续调用文件写入工具。
@@ -101,7 +104,9 @@ public class AiCodeGeneratorServiceFactory {
         return createAiCodeGeneratorService(memoryId, codeGenType, currentChatMemoryProvider);
     }
 
-    /** 工作流可使用本轮临时记忆，避免内部重试写入正式聊天记录。 */
+    /**
+     * 工作流可使用本轮临时记忆，避免内部重试写入正式聊天记录。
+     */
     public AiCodeGeneratorService createAiCodeGeneratorService(AppChatMemoryId memoryId, CodeGenTypeEnum codeGenType,
                                                                ChatMemoryProvider currentChatMemoryProvider) {
         currentChatMemoryProvider.get(memoryId).messages();
@@ -178,8 +183,46 @@ public class AiCodeGeneratorServiceFactory {
      */
     @Bean
     public AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService() {
+        AiCodeGenTypeRoutingService preferred = createRoutingService(routingChatModel);
+        AiCodeGenTypeRoutingService fallback = routingChatModel == chatModel
+                ? preferred : createRoutingService(chatModel);
+        return new AiCodeGenTypeRoutingService() {
+            @Override public CodeGenTypeEnum routeCodeGenType(String userPrompt) {
+                return routeCodeGenType(userPrompt, null);
+            }
+
+            @Override public CodeGenTypeEnum routeCodeGenType(String userPrompt, com.xhl.aicodegenerate.observability.TraceSession trace) {
+                AiCodeGenTypeRoutingService currentPreferred = trace == null ? preferred : createRoutingService(
+                        new com.xhl.aicodegenerate.observability.TracedChatModel(routingChatModel, trace, "routing"));
+                AiCodeGenTypeRoutingService currentFallback = routingChatModel == chatModel ? currentPreferred
+                        : trace == null ? fallback : createRoutingService(
+                                new com.xhl.aicodegenerate.observability.TracedChatModel(chatModel, trace, "primary_fallback"));
+                try {
+                    return currentPreferred.routeCodeGenType(userPrompt);
+                } catch (InputGuardrailException e) {
+                    throw e;
+                } catch (RuntimeException e) {
+                    if (currentPreferred == currentFallback) {
+                        log.error("智能路由主模型不可用", e);
+                        throw new BusinessException(ErrorCode.OPERATION_ERROR, "智能路由服务暂时不可用，请稍后重试");
+                    }
+                    log.warn("专用路由模型调用失败，回退到现有主模型：{}", e.toString());
+                }
+                try {
+                    return currentFallback.routeCodeGenType(userPrompt);
+                } catch (InputGuardrailException e) {
+                    throw e;
+                } catch (RuntimeException e) {
+                    log.error("智能路由回退主模型失败", e);
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR, "智能路由服务暂时不可用，请稍后重试");
+                }
+            }
+        };
+    }
+
+    private AiCodeGenTypeRoutingService createRoutingService(ChatModel model) {
         return AiServices.builder(AiCodeGenTypeRoutingService.class)
-                .chatModel(routingChatModel)
+                .chatModel(model)
                 .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
