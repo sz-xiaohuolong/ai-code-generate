@@ -99,3 +99,15 @@ yarn build
 ## 7. 代码同步
 
 功能提交 `2e3dc3f1c7ab3fce8236d269cf36c213bd0a953c` 已正常推送 `origin/main`，远端引用核对一致。未部署，未迁移业务数据库。同步范围为本需求 64 个文件，不包含主工作区并行追踪／评测和既有修复。后续文档同步不改变上述被测代码。产品验收保持 PARTIAL，默认关闭，模型选择仍待用户决定。
+
+## 8. 后续模型对比准备（尚未下载／切换）
+
+2026-11-07 再次核对本地 `/api/tags`，仍仅有原 nomic 模型。新建本地校准脚本 `model-research/compare_embedding.py`，复用原三份文档／五条查询，以同一前缀规则、`truncate=false`、模型 digest 与余弦分数计算重新执行；结果可复现：正例对应最低分 0.79672、无关负例最高分 0.86282，泛化订单需求排名错误，门槛差为 -0.06610。本工具只接受已安装的本地模型；对未安装 BGE 的调用以参数错误退出，未执行下载。原始资料与结果均在既有 `.evidence/private-knowledge-mvp-20261107/model-research/`。
+
+推荐先对比 `bge-m3:latest`，而不是直接把它设为合格默认值。理由是官方说明其支持多语种、1024 维、8192 Token，并且查询无需额外指令；与当前适配器对非 Nomic 模型不加前缀的处理一致。Ollama 模型库显示约 1.2 GB；本机 24 GiB 内存、可用磁盘约 195 GiB，仅说明下载容量具备条件，不等于实际推理性能已测。
+
+备选 `qwen3-embedding:0.6b` 在 Ollama 库约 639 MB；官方建议查询使用任务指令。当前适配器未实现该前缀策略，因此不能仅修改模型名便声称遵循其推荐用法。若选择它，应先明确查询指令、更新 profile 身份并增加相应契约检查。首轮优先保持接入简单的 BGE；若其保留样本效果不足，再评估备选，不引入重排或混合检索扩展。
+
+比较仍须先取得用户对下载／模型选择的决定。获准后依次执行：隔离对比 → 新增独立保留集与困难负例 → 阈值校准 → 新 profile 重建隔离索引 → 真实生成与业务验收。五条既有样本即使通过，也只能作为必要检查，不能单独批准启用。默认关闭与 PARTIAL 状态保持不变。
+
+官方依据（核对日期 2026-11-07）：[Ollama BGE-M3 模型库](https://ollama.com/library/bge-m3)、[BAAI 模型卡](https://huggingface.co/BAAI/bge-m3)、[Ollama Qwen3 Embedding 模型库](https://ollama.com/library/qwen3-embedding)、[Qwen 0.6B 模型卡](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)、[Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.md)。本次公开页面检索工具未返回内容，以上来自直接读取官方页面及 Context7 官方 API 资料；未用排行榜替代本机测试。
