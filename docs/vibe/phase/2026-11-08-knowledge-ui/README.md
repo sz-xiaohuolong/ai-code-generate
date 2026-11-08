@@ -33,7 +33,7 @@
 
 ## 验证结果
 
-验证状态：VERIFIED（受控前端范围）；代码同步待执行。
+验证状态：VERIFIED（受控前端范围）；交付状态：RELEASED（代码同步）。功能提交 `bc1075a` 已推送 `origin/main`，并核对完整哈希 `bc1075afd4913f30de9f39fda91992998c387fd6` 一致；未部署。
 
 - `yarn build`：类型检查与生产构建通过。仅保留既有 Ant Design Vue 大 chunk 提示。
 - `eslint src/pages/knowledge/KnowledgePage.vue`：通过；现有前端单测 17/17 通过。
