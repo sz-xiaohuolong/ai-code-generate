@@ -2,7 +2,7 @@
 
 这次功能解决的是“每次生成都要重新粘贴接口文档和业务规则”的问题。用户把资料上传一次，后续在自己的应用中开启知识库，平台就从本人资料中找出相关片段，再据此生成代码。它服务于代码生成过程，不会自动让生成的网站变成知识问答系统。
 
-**已切换为本地 BGE-M3，知识库仍默认关闭。** 2026-11-08 经用户批准，安装 `bge-m3:latest` 并更新默认配置；原 5 条校准样本通过，新增 12 条保留样本通过 11 条，“年假审批”仍误匹配“报销审批”。真实供应商生成质量未验收，因此保持 `knowledge.enabled=false`。模型切换完成与整个功能质量验收通过是两回事，详见 [VERIFICATION.md 第 9 节](VERIFICATION.md#9-bge-m3-切换与实测2026-11-08)。
+**本机个人知识库已开启试用。** 2026-11-08 用户明确批准迁移业务库、启动持久化 Chroma、开启本地开关并重启后端，现已执行并通过真实登录、上传、入库、检索及容器重启持久化检查。共享配置默认仍关闭，本机 `application-local.yml` 覆盖为开启。BGE-M3 原 5 条校准样本通过，保留集 11/12，“年假审批”仍可能误匹配“报销审批”；这属于试用质量限制，不阻止已授权的本地使用。真实供应商六组合生成质量尚未完整验收，最新环境证据见 [VERIFICATION.md 第 10 节](VERIFICATION.md#10-本地业务环境开启试用2026-11-08)。
 
 ## 1. 实际业务流程
 
@@ -17,7 +17,7 @@
 
 ## 2. 本地启动条件
 
-以下命令为待用户执行业务环境验收的步骤，不代表已经在个人业务库或外部生成模型上执行过。
+本机已执行数据库迁移、Chroma 启动和后端重启；以下命令用于今后恢复服务或新环境配置。本次没有调用外部生成模型。
 
 ### 2.1 数据库与基础服务
 
@@ -32,9 +32,10 @@ mysql -u root -p ai_code_generate < sql/migrations/20261107_private_knowledge.sq
 启动带持久卷且只监听本机的 Chroma：
 
 ```bash
-docker run --name ai-code-knowledge -d \
+docker run --name ai-code-knowledge --restart unless-stopped -d \
   -p 127.0.0.1:8000:8000 \
   -v ai-code-knowledge:/data \
+  -e ANONYMIZED_TELEMETRY=False \
   chromadb/chroma:1.1.0
 ```
 
@@ -47,7 +48,7 @@ curl http://127.0.0.1:8000/api/v2/heartbeat
 
 ### 2.2 配置与模型验证
 
-本机已通过 Ollama 安装 BGE-M3，`application-local.yml` 已设置 `knowledge.embedding-model: bge-m3:latest`。新环境先运行 `ollama pull bge-m3:latest`。配置示例与 Java 默认值已同步；修改后需重启后端使配置生效。当前候选 `knowledge.min-score: 0.78`，总开关仍关闭。
+本机已通过 Ollama 安装 BGE-M3，`application-local.yml` 已设置 `knowledge.embedding-model: bge-m3:latest`。新环境先运行 `ollama pull bge-m3:latest`。配置示例与 Java 默认值已同步；修改后需重启后端使配置生效。当前候选 `knowledge.min-score: 0.78`；本机已设置 `knowledge.enabled: true`，Ollama 地址为 `http://127.0.0.1:11434`，Chroma 地址为 `http://127.0.0.1:8000`。
 
 可在仓库根目录复现中文检索检查（仅访问本机 Ollama，不写业务库）：
 
@@ -57,7 +58,7 @@ python3 scripts/check_knowledge_embeddings.py --output /tmp/bge-quality-check.js
 
 输出文件必须尚不存在，以避免覆盖旧证据。当前预期为校准集 5/5、保留集 11/12，退出码 **1** 表示质量门槛未全过；退出码 2 表示依赖或执行异常。不要通过只删除失败样本或反复调整阈值把保留集变成调参集。
 
-只有在中文检索和真实生成完成验收后才启用业务环境。模型摘要、维度或分块配置变化时必须重建索引；首版没有自动模型迁移功能。新 BGE 索引只能建立在新的个人知识空间中。已有 Nomic 空间会明确拒绝查询和新版发布，原文与旧版保留；**删除文档再上传也不会自动重置空间的模型身份**。不要手工改 profile 字段绕过校验。本次仅在隔离测试空间重建并验证，未迁移业务库。
+用户已批准带上述质量限制进行本地试用；正式质量验收继续按下方步骤执行。模型摘要、维度或分块配置变化时必须重建索引；首版没有自动模型迁移功能。新 BGE 索引只能建立在新的个人知识空间中。已有 Nomic 空间会明确拒绝查询和新版发布，原文与旧版保留；**删除文档再上传也不会自动重置空间的模型身份**。不要手工改 profile 字段绕过校验。此前模型切换只验证隔离空间；本次已在原先没有知识表的业务库创建新表，并用临时用户验证新 BGE 空间。没有覆盖或迁移任何旧模型资料。
 
 关闭 `langchain4j.open-ai.streaming-chat-model.log-requests` 和 `log-responses`。Vue 工具模型的原始请求／响应日志已在代码中关闭。向量化留在本地；查询规划和生成仍使用项目已有模型配置，相关资料片段可能发送至外部生成服务。
 
@@ -66,8 +67,11 @@ python3 scripts/check_knowledge_embeddings.py --output /tmp/bge-quality-check.js
 ### 2.3 启动应用
 
 ```bash
-./mvnw spring-boot:run
+./mvnw spring-boot:run \
+  "-Dspring-boot.run.jvmArguments=-Dspring.devtools.restart.enabled=false -Dlangchain4j.http.clientBuilderFactory=dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory"
 ```
+
+当前依赖同时包含 JDK 与 Spring HTTP 客户端，上述 JVM 参数明确选择 JDK 默认客户端，避免启动时 SPI 冲突；Chroma 适配器仍显式使用自己的 Spring 客户端。本机运行中的后端已使用此命令启动。
 
 另开终端：
 

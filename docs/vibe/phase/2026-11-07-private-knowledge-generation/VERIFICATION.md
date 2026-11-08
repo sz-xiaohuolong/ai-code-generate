@@ -1,6 +1,6 @@
 # 验收记录：个人知识库辅助代码生成 MVP
 
-**当前为 PARTIAL：代码链路通过受控验证，中文检索质量未通过，真实供应商生成质量尚未验收。** 默认 `knowledge.enabled=false`；不能将代码同步解释为功能已经可直接启用。2026-11-08 用户已批准并完成本地 BGE-M3 切换，最新结果见第 9 节；此前 Nomic 记录保留为历史，不代表当前默认模型。
+**当前为 PARTIAL：代码链路通过受控验证，中文检索质量未通过，真实供应商生成质量尚未验收。** 共享配置默认 `knowledge.enabled=false`；2026-11-08 用户批准本地试用后，已完成业务库迁移及本地启用，见第 10 节。本地可试用不等于所有质量用例通过。2026-11-08 用户已批准并完成本地 BGE-M3 切换，最新结果见第 9 节；此前 Nomic 记录保留为历史，不代表当前默认模型。
 
 ## 1. 被测范围与环境
 
@@ -169,3 +169,28 @@ python3 scripts/check_knowledge_embeddings.py \
 ```
 
 上述测试要求本地 BGE 与 Nomic 均存在，后者仅用于验证旧索引兼容性边界。真实业务环境还需按 [USER_GUIDE](USER_GUIDE.md) 完成登录、上传、六种生成组合与页面业务断言；质量失败项必须如实保留。
+
+
+## 10. 本地业务环境开启试用（2026-11-08）
+
+用户明确批准执行知识库迁移、启动持久化 Chroma、开启本地试用开关并重启后端。本次按该授权落地，质量限制保留，不再将尚未全部通过的检索样本视为禁止本地试用的条件。
+
+### 已执行
+
+1. 核对目标为本机 `3306/ai_code_generate`，迁移前不存在 `knowledge_*` 表；先用 mysqldump 单事务备份业务库，再执行 `sql/migrations/20261107_private_knowledge.sql`，六张新表创建成功，未修改既有表。
+2. 创建容器 `ai-code-knowledge`，镜像 `chromadb/chroma:1.1.0`，只绑定 `127.0.0.1:8000`；命名卷 `ai-code-knowledge` 挂载 `/data`，重启策略 `unless-stopped`，关闭匿名遥测。历史隔离测试容器不作为业务实例使用。
+3. 本机未跟踪的 `application-local.yml` 设 `knowledge.enabled=true`、模型 `bge-m3:latest`、Ollama `11434`、Chroma `8000`、候选阈值 `0.78`。关闭模型原始请求和响应日志，保留其他配置与凭据；共享 application.yml 的默认关闭行为不变。
+4. 优雅停止原 8123 后端并重启。第一次启动发现 JDK／Spring HTTP 客户端 SPI 冲突，依据实际异常补充 JVM 参数 `-Dlangchain4j.http.clientBuilderFactory=dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory` 后正常启动；未为此修改业务源码。可重现命令已更新至 USER_GUIDE。
+
+### 实际验证
+
+- 通过真实 HTTP 注册专属临时用户并登录，`GET /api/knowledge/documents` 返回成功且 `enabled=true`。
+- 通过真实 multipart API 上传无敏感内容的虚构订单文档，经过正在运行的后端、MySQL、Ollama BGE 与 Chroma，最终状态为 READY／v1。
+- 用真实 BGE 生成 1024 维查询向量，在新建的本人 collection 中按已发布 buildId 和 profile 过滤，Chroma 返回正确测试片段，换算分数为 **0.873786985**。该检查直接调用向量检索接口，没有调用外部查询规划或代码生成模型。
+- 重启业务 Chroma 容器后重复检索，分数保持 **0.873786985**，确认数据来自持久卷。
+- 删除测试文档后列表为空；清理本次专属测试用户、知识记录及其 collection，并注销测试会话；没有向用户个人库遗留示例资料。
+- 后端持续监听 `8123/api`，Chroma 持续监听 `127.0.0.1:8000`。浏览器自动化期间因控制服务超时未完成最终截图，页面同源接口的真实登录与上传验证已通过；不把接口验证称为截图验收。
+
+原始证据目录 `.evidence/knowledge-local-enable-20261108/`：`migration.json`、`tables-before.txt`、`tables-after.txt`、`backend.log`（第一次启动失败）、`backend-fixed.log`、`backend-process.json`、`smoke.log` 与 `smoke-result.json`。业务备份 `business-before.sql` 与本地配置备份仅保存在权限受限的本地证据目录，不进入版本库。
+
+本地环境状态为可试用；中文困难负例和真实供应商六组合生成质量仍按第 9 节及人工步骤继续验证，不升级为整体 VERIFIED。
