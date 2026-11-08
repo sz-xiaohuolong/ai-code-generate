@@ -1,5 +1,11 @@
 # 当前进度
 
+## 登录与首页截图复刻（2026-11-08）
+
+已按用户新提供的两张截图完成局部 UI 调整：登录／注册改为左表单、右本地光影图片；首页加入冷色聚光灯、SVG 流线、空输入轮播与提交粒子，作品区采用交错 Bento 并展示已有元数据。账号接口、生成模式、知识库、列表查询和作品操作保留；没有新增业务功能或依赖。
+
+17 项前端单测、类型／生产构建、改动文件 lint／格式和 37 项生产 Chrome 受控验收通过。独立完整复审仅要求统一示例按钮图标，替换为 Lucide SVG 后重拍五张截图，verdict 将该项评为 resolved、disposition 为 ship。来源、参数及证据见 [追加方案](phase/2026-11-07-platform-ui-beautification/PROPOSED_DESIGN.md) 与 [追加验收](phase/2026-11-07-platform-ui-beautification/VERIFICATION.md)。本地 `localhost:5175` 可预览；未调用真实模型、未写入业务数据或部署。按长期授权同步当前 `main → origin/main`，提交编号以本轮 Git 历史为准；其他任务的 AGENTS、后端与配置改动保留。
+
 ## 平台 UI 美化（2026-11-08）
 
 用户已批准按参考方案实施首页、生成工作台与三类管理员页面。需求 FROZEN；实现已完成，受控前端验收通过，独立复审 ship；状态 RELEASED（代码同步），功能提交 `a2d34c7` 已推送 `origin/main` 并核对完整远程哈希一致。方案、任务和证据见 [阶段目录](phase/2026-11-07-platform-ui-beautification/PROPOSED_DESIGN.md)、[验收记录](phase/2026-11-07-platform-ui-beautification/VERIFICATION.md)。

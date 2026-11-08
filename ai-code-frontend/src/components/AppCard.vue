@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   CommentOutlined,
   ExportOutlined,
@@ -28,6 +28,16 @@ const props = withDefaults(defineProps<Props>(), {
 const router = useRouter()
 const copied = ref(false)
 const coverLoadFailed = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | undefined
+const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+const followPointer = (event: PointerEvent) => {
+  if (event.pointerType !== 'mouse' || motionQuery.matches) return
+  const card = event.currentTarget as HTMLElement
+  const rect = card.getBoundingClientRect()
+  card.style.setProperty('--pointer-x', `${event.clientX - rect.left}px`)
+  card.style.setProperty('--pointer-y', `${event.clientY - rect.top}px`)
+}
+onBeforeUnmount(() => clearTimeout(copyTimer))
 
 watch(
   () => props.app.cover,
@@ -37,7 +47,7 @@ watch(
 )
 
 const codeGenTypeLabel = computed(() => {
-  return CODE_GEN_TYPE_CONFIG[props.app.codeGenType as CodeGenTypeEnum]?.label || 'HTML'
+  return CODE_GEN_TYPE_CONFIG[props.app.codeGenType as CodeGenTypeEnum]?.label || '待生成'
 })
 
 // 相对时间友好格式化
@@ -99,7 +109,8 @@ const copyPrompt = async (e: Event) => {
     }
     copied.value = true
     message.success('提示词已复制到剪贴板')
-    setTimeout(() => {
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => {
       copied.value = false
     }, 2200)
   } catch {
@@ -108,8 +119,9 @@ const copyPrompt = async (e: Event) => {
 }
 </script>
 
+<!-- 新增时钟来自 Iconify / Lucide，原始许可保存在 public/licenses/lucide.txt。 -->
 <template>
-  <article class="app-card">
+  <article class="app-card" :class="{ 'app-card-hero': hero }" @pointermove="followPointer">
     <RouterLink
       :to="`/app/chat/${app.id}`"
       class="card-viewport"
@@ -126,6 +138,9 @@ const copyPrompt = async (e: Event) => {
       <div v-else class="cover-placeholder">
         <FileImageOutlined /><span>暂无预览</span><small>进入工作台查看应用</small>
       </div>
+      <span class="deploy-state" :class="{ deployed: app.deployKey }"
+        ><span />{{ app.deployKey ? '已部署' : '未部署' }}</span
+      >
     </RouterLink>
     <div class="card-body">
       <div class="card-title-row">
@@ -135,11 +150,27 @@ const copyPrompt = async (e: Event) => {
         ><span v-if="featured" class="featured-label">精选</span>
       </div>
       <div class="card-meta">
-        <CodeOutlined /> <span>{{ codeGenTypeLabel }}</span
-        ><span class="meta-dot">·</span
-        ><span>{{ formatRelativeTime(app.updateTime || app.createTime) }}</span>
+        <span><CodeOutlined /> {{ codeGenTypeLabel }}</span>
+        <span class="mode-tag">{{
+          app.generationMode === 'workflow' ? '工作流模式' : '标准模式'
+        }}</span>
       </div>
       <p class="card-prompt" :title="app.initPrompt">{{ app.initPrompt || '暂未记录初始需求' }}</p>
+      <div class="card-updated" :title="app.updateTime || app.createTime">
+        <svg aria-hidden="true" width="1em" height="1em" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6h4" />
+          </g>
+        </svg>
+        更新于 {{ formatRelativeTime(app.updateTime || app.createTime) }}
+      </div>
       <div class="card-footer">
         <div class="creator">
           <a-avatar :src="getUserAvatar(app.user?.userAvatar)" :size="22" /><span>{{
@@ -174,23 +205,48 @@ const copyPrompt = async (e: Event) => {
 </template>
 
 <style scoped>
-/* Hallmark · dismissed 28a · AppCard 的 card-viewport 位于创作输入下方，首屏核心是创建输入；封面延迟加载避免阻塞用户开始创作。 */
 .app-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   background: var(--ui-surface);
   border: 1px solid var(--ui-line);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
+  isolation: isolate;
+  transition: border-color 0.2s;
+}
+.app-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    440px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
+    #6aa5ef26,
+    transparent 70%
+  );
+  transition: opacity 0.2s;
 }
 .app-card:hover {
-  border-color: var(--ui-line-strong);
+  border-color: var(--ui-accent-border);
+}
+.app-card:hover::after {
+  opacity: 1;
 }
 .card-viewport {
+  position: relative;
   display: block;
-  aspect-ratio: 16 / 10;
+  height: 194px;
+  flex: none;
   overflow: hidden;
-  border-bottom: 1px solid var(--ui-line);
   background: var(--ui-surface-muted);
+}
+.app-card-hero .card-viewport {
+  height: 230px;
 }
 .real-cover {
   display: block;
@@ -198,6 +254,10 @@ const copyPrompt = async (e: Event) => {
   height: 100%;
   object-fit: cover;
   object-position: top;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.app-card:hover .real-cover {
+  transform: scale(1.025);
 }
 .cover-placeholder {
   display: flex;
@@ -207,6 +267,9 @@ const copyPrompt = async (e: Event) => {
   flex-direction: column;
   gap: 8px;
   color: var(--ui-ink-faint);
+  background:
+    radial-gradient(ellipse at 75% 15%, var(--ui-accent-soft), transparent 80%),
+    var(--ui-surface-muted);
 }
 .cover-placeholder > .anticon {
   font-size: 28px;
@@ -218,8 +281,34 @@ const copyPrompt = async (e: Event) => {
 .cover-placeholder small {
   font-size: 12px;
 }
+.deploy-state {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  top: 16px;
+  right: 16px;
+  border: 1px solid #ffffff30;
+  border-radius: 6px;
+  padding: 5px 9px;
+  background: #152237e8;
+  color: #f0f4fa;
+  font-size: 11px;
+}
+.deploy-state > span {
+  width: 5px;
+  height: 5px;
+  background: #c3cddd;
+  border-radius: 50%;
+}
+.deploy-state.deployed > span {
+  background: #8ce1bc;
+}
 .card-body {
-  padding: 16px 20px 12px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 20px 24px 14px;
 }
 .card-title-row {
   display: flex;
@@ -234,9 +323,13 @@ const copyPrompt = async (e: Event) => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--ui-ink);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.app-card-hero .card-title {
+  font-size: 22px;
 }
 .card-title:hover {
   color: var(--ui-accent);
@@ -252,13 +345,21 @@ const copyPrompt = async (e: Event) => {
 .card-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--ui-ink-faint);
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  color: var(--ui-ink-soft);
+  font-size: 11px;
 }
-.meta-dot {
-  color: var(--ui-line-strong);
+.card-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mode-tag {
+  border: 1px solid var(--ui-line);
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 .card-prompt {
   display: -webkit-box;
@@ -266,10 +367,19 @@ const copyPrompt = async (e: Event) => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 42px;
-  margin: 12px 0 16px;
+  margin: 14px 0;
   font-size: 13px;
   line-height: 1.65;
   color: var(--ui-ink-soft);
+  overflow-wrap: anywhere;
+}
+.card-updated {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: auto 0 14px;
+  font-size: 11px;
+  color: var(--ui-ink-faint);
 }
 .card-footer {
   display: flex;
@@ -288,7 +398,7 @@ const copyPrompt = async (e: Event) => {
   color: var(--ui-ink-soft);
 }
 .creator span {
-  max-width: 110px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -310,10 +420,36 @@ const copyPrompt = async (e: Event) => {
   background: var(--ui-accent-soft);
   color: var(--ui-accent);
 }
+@media (max-width: 960px) {
+  .app-card-hero .card-viewport {
+    height: 194px;
+  }
+  .app-card-hero .card-title {
+    font-size: 18px;
+  }
+  .card-body {
+    padding: 18px 20px 12px;
+  }
+}
 @media (hover: none) {
   .card-icon-button {
     width: 44px;
     height: 44px;
+  }
+  .app-card::after {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-card,
+  .real-cover {
+    transition: none;
+  }
+  .app-card:hover .real-cover {
+    transform: none;
+  }
+  .app-card::after {
+    display: none;
   }
 }
 </style>

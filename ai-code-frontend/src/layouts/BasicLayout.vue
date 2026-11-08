@@ -7,15 +7,21 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 const route = useRoute()
 const isHomePage = computed(() => route.path === '/')
 const isAdminPage = computed(() => route.path.startsWith('/admin/'))
+const isAuthPage = computed(() => ['/user/login', '/user/register'].includes(route.path))
 const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
 </script>
 
 <template>
   <a-layout
     class="basic-layout"
-    :class="{ 'home-layout': isHomePage, 'chat-layout': isChatPage, 'admin-layout': isAdminPage }"
+    :class="{
+      'home-layout': isHomePage,
+      'chat-layout': isChatPage,
+      'admin-layout': isAdminPage,
+      'auth-layout': isAuthPage,
+    }"
   >
-    <a-layout-header class="layout-header">
+    <a-layout-header v-if="!isAuthPage" class="layout-header">
       <GlobalHeader />
     </a-layout-header>
     <a-layout-content class="layout-content">
@@ -23,7 +29,7 @@ const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
         <RouterView />
       </div>
     </a-layout-content>
-    <a-layout-footer v-if="!isChatPage" class="layout-footer">
+    <a-layout-footer v-if="!isChatPage && !isAuthPage" class="layout-footer">
       <GlobalFooter />
     </a-layout-footer>
   </a-layout>
@@ -58,6 +64,13 @@ const isChatPage = computed(() => route.path.startsWith('/app/chat/'))
   margin: 0 auto;
 }
 
+.auth-layout .layout-content {
+  padding: 0;
+  background: var(--ui-surface);
+}
+.auth-layout .content-wrapper {
+  max-width: none;
+}
 .home-layout .layout-content {
   padding: 0;
 }

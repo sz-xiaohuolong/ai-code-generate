@@ -6,6 +6,8 @@ import { ArrowUpOutlined } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import AppCard from '@/components/AppCard.vue'
+import HomeAtmosphere from '@/components/HomeAtmosphere.vue'
+import CreationPromptInput from '@/components/CreationPromptInput.vue'
 import KnowledgeToggle from '@/components/KnowledgeToggle.vue'
 import { rememberFirstKnowledgeRequest } from '@/utils/knowledgeRequest'
 import GenerationTracePanel from '@/components/GenerationTracePanel.vue'
@@ -21,7 +23,7 @@ const generationModeOptions = [
 ]
 const myError = ref('')
 const featuredError = ref('')
-const promptInput = ref<{ focus: () => void } | null>(null)
+const promptInput = ref<InstanceType<typeof CreationPromptInput> | null>(null)
 let myRequest = 0
 let featuredRequest = 0
 
@@ -115,6 +117,7 @@ const loadFeaturedApps = async () => {
 }
 
 const chooseSample = (value: string) => {
+  if (creating.value) return
   prompt.value = value
   promptInput.value?.focus()
 }
@@ -136,12 +139,15 @@ const createApp = async () => {
   }
   creating.value = true
   const selectedKnowledge = useKnowledge.value
+  const generationMode = generationModeStore.defaultMode
+  const animation = promptInput.value?.vanish() ?? Promise.resolve()
   creationError.value = ''
   creationRequestId.value = ''
   creationTraceOpen.value = false
   try {
-    const res = await addApp({ initPrompt, generationMode: generationModeStore.defaultMode })
+    const res = await addApp({ initPrompt, generationMode })
     if (res.data.code === 0 && res.data.data) {
+      await animation
       rememberFirstKnowledgeRequest(String(res.data.data), selectedKnowledge)
       await router.push(`/app/chat/${res.data.data}`)
     } else {
@@ -155,6 +161,7 @@ const createApp = async () => {
       creationRequestId.value = String(error.response?.headers['x-request-id'] || '')
     message.error(creationError.value)
   } finally {
+    promptInput.value?.cancel()
     creating.value = false
   }
 }
@@ -188,20 +195,23 @@ onMounted(loadFeaturedApps)
 <template>
   <main class="home-page">
     <section class="hero-section" aria-labelledby="home-title">
+      <HomeAtmosphere />
       <div class="hero-inner">
         <h1 id="home-title" class="hero-title">把想法，变成应用</h1>
         <p class="hero-subtitle">描述你想做什么，剩下的交给 AI。预览、修改，一步步完成你的作品。</p>
         <div class="creation-studio">
           <div class="prompt-box">
-            <a-textarea
+            <CreationPromptInput
               ref="promptInput"
-              v-model:value="prompt"
-              aria-label="描述你想创建的应用"
-              placeholder="例如：为我创建一个摄影作品集，以大幅图片展示作品，并提供联系入口…"
-              :rows="3"
-              :maxlength="800"
-              @press-enter.ctrl="createApp"
-              @press-enter.meta="createApp"
+              v-model="prompt"
+              :examples="[
+                '为我创建一个摄影作品集，让每一张照片成为主角…',
+                '做一个清爽的个人博客，记录技术与生活…',
+                '为我的品牌设计官网，展示产品和服务…',
+                '我想要一个设计师作品集，分享最近的创作…',
+              ]"
+              :disabled="creating"
+              @submit="createApp"
             />
             <div class="prompt-options">
               <a-segmented
@@ -255,10 +265,23 @@ onMounted(loadFeaturedApps)
               :key="sample.label"
               type="button"
               class="sample-chip"
+              :disabled="creating"
               :title="sample.prompt"
               @click="chooseSample(sample.prompt)"
             >
-              {{ sample.label }} <span aria-hidden="true">↗</span>
+              {{ sample.label }}
+              <span aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 24 24">
+                  <path
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 7h10v10M7 17L17 7"
+                  />
+                </svg>
+              </span>
             </button>
           </div>
         </div>
@@ -298,7 +321,12 @@ onMounted(loadFeaturedApps)
             <a-button @click="loadMyApps">重新加载作品</a-button>
           </div>
           <div v-else-if="myApps.length" class="app-grid">
-            <AppCard v-for="app in myApps" :key="app.id" :app="app" />
+            <AppCard
+              v-for="(app, index) in myApps"
+              :key="app.id"
+              :app="app"
+              :hero="[0, 3, 4].includes(index % 6)"
+            />
           </div>
           <div v-else class="empty-placeholder">
             <h3>{{ mySearch.appName ? '没有找到匹配的作品' : '还没有作品' }}</h3>
@@ -350,7 +378,13 @@ onMounted(loadFeaturedApps)
           <a-button @click="loadFeaturedApps">重新加载案例</a-button>
         </div>
         <div v-else-if="featuredApps.length" class="app-grid">
-          <AppCard v-for="app in featuredApps" :key="app.id" :app="app" featured />
+          <AppCard
+            v-for="(app, index) in featuredApps"
+            :key="app.id"
+            :app="app"
+            :hero="[0, 3, 4].includes(index % 6)"
+            featured
+          />
         </div>
         <div v-else class="empty-placeholder">
           <h3>{{ featuredSearch.appName ? '没有找到匹配的案例' : '精选案例即将呈现' }}</h3>
@@ -379,58 +413,93 @@ onMounted(loadFeaturedApps)
   background: var(--ui-shell);
 }
 .hero-section {
-  padding: 72px 24px 56px;
+  --ui-ink: #f0f5ff;
+  --ui-ink-soft: #bfcbdd;
+  --ui-ink-faint: #a3b2c9;
+  --ui-accent: #b2cfff;
+  --ui-accent-hover: #d5e5ff;
+  --ui-accent-soft: #203553;
+  --ui-accent-border: #7193c3;
+  --ui-surface: #131d2d;
+  --ui-surface-muted: #1c293e;
+  --ui-line: #344359;
+  --ui-line-subtle: #2a374c;
+  --ui-danger: #ffc2c9;
+  --ui-danger-soft: #37222e;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 90px 24px 64px;
+  background: #080d18;
+  color: var(--ui-ink);
+  color-scheme: dark;
 }
 .hero-inner {
-  max-width: 760px;
+  position: relative;
+  z-index: 1;
+  max-width: 800px;
   margin: 0 auto;
   text-align: center;
 }
 .hero-title {
-  margin: 0 0 16px;
-  font-size: 42px;
+  margin: 0 0 20px;
+  font-size: clamp(36px, 4.2vw, 60px);
   font-weight: 650;
-  line-height: 1.25;
-  letter-spacing: -0.04em;
-  color: var(--ui-ink);
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+  color: #f3f6fc;
+  text-wrap: balance;
 }
 .hero-subtitle {
-  margin: 0 0 32px;
+  margin: 0 0 36px;
   font-size: 15px;
-  line-height: 1.7;
-  color: var(--ui-ink-soft);
+  line-height: 1.8;
+  color: #bfcbdd;
+}
+.creation-studio {
+  max-width: 740px;
+  margin: auto;
 }
 .prompt-box {
-  padding: 20px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line-strong);
-  border-radius: 16px;
+  position: relative;
+  padding: 0 0 18px;
+  background: #121c2be8;
+  border: 1px solid #ffffff29;
+  border-radius: 18px;
   text-align: left;
-  box-shadow: var(--ui-shadow-xs);
+  box-shadow: 0 24px 70px #0005;
 }
 .prompt-box:focus-within {
-  outline: 2px solid var(--ui-accent-border);
-  outline-offset: 2px;
-}
-.prompt-box :deep(textarea.ant-input) {
-  padding: 0;
-  border: 0 !important;
-  box-shadow: none !important;
-  background: transparent;
-  resize: vertical;
-  font-size: 16px;
-  line-height: 1.7;
-  min-height: 96px;
-  max-height: 240px;
+  outline: 2px solid #8fb8f1;
+  outline-offset: 3px;
 }
 .prompt-options {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-top: 16px;
+  padding: 0 22px;
+}
+.prompt-options :deep(.ant-segmented) {
+  background: #080f1c;
+  padding: 4px;
+  color: #b5c3d8;
+  border-radius: 8px;
+}
+.prompt-options :deep(.ant-segmented-item-selected),
+.prompt-options :deep(.ant-segmented-thumb) {
+  color: #edf4ff;
+  background: #2c3c53;
+  box-shadow: none;
+  border-radius: 5px;
+}
+.prompt-options :deep(.ant-segmented-item:hover:not(.ant-segmented-item-disabled)) {
+  color: #fff;
+}
+.prompt-options :deep(.ant-segmented-item-disabled) {
+  color: #a3b2c9;
 }
 .mode-description {
-  color: var(--ui-ink-faint);
+  color: #a3b2c9;
   font-size: 12px;
 }
 .prompt-actions {
@@ -438,14 +507,17 @@ onMounted(loadFeaturedApps)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid var(--ui-line-subtle);
-  margin-top: 16px;
-  padding-top: 12px;
+  margin: 16px 22px 0;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff14;
 }
 .prompt-actions :deep(.knowledge-choice) {
   flex: 1;
   min-width: 0;
   font-size: 12px;
+}
+.prompt-actions :deep(.knowledge-choice a) {
+  color: #b2cfff;
 }
 .submit-actions {
   display: flex;
@@ -453,50 +525,66 @@ onMounted(loadFeaturedApps)
   align-items: center;
   gap: 16px;
 }
-.create-button {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 8px;
+.prompt-actions .create-button.ant-btn-primary {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 9px;
+  background: #edf4ff;
+  border-color: #edf4ff;
+  color: #142138;
+  font-weight: 600;
+}
+.prompt-actions .create-button.ant-btn-primary:not(:disabled):hover {
+  color: #142138;
+  background: #cadfff;
+  border-color: #cadfff;
 }
 .kbd-hint {
-  color: var(--ui-ink-faint);
+  color: #a3b2c9;
   font-size: 11px;
 }
 .sample-list {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
+  gap: 10px;
+  margin-top: 24px;
 }
 .sample-chip {
   display: inline-flex;
   align-items: center;
   gap: 16px;
-  min-height: 36px;
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid var(--ui-line);
+  min-height: 38px;
+  padding: 8px 14px;
+  background: #111b2980;
+  border: 1px solid #ffffff1f;
   border-radius: 8px;
-  color: var(--ui-ink-soft);
-  font-size: 13px;
+  color: #bdcce0;
+  font-size: 12px;
   cursor: pointer;
+  transition:
+    background 0.18s,
+    border-color 0.18s;
 }
 .sample-chip span {
-  color: var(--ui-ink-faint);
+  color: #a3b2c9;
 }
-.sample-chip:hover {
-  color: var(--ui-accent);
-  background: var(--ui-surface);
-  border-color: var(--ui-accent-border);
+.sample-chip:hover:not(:disabled) {
+  color: #fff;
+  background: #22334b;
+  border-color: #7896bb;
+}
+.sample-chip:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 .library {
-  max-width: 1240px;
-  padding: 0 32px 56px;
+  max-width: 1280px;
+  padding: 20px 40px 64px;
   margin: 0 auto;
 }
 .app-section {
-  padding: 32px 0;
+  padding: 40px 0;
 }
 .featured-section {
   border-top: 1px solid var(--ui-line);
@@ -506,12 +594,12 @@ onMounted(loadFeaturedApps)
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
 .section-header h2 {
   text-wrap: balance;
   margin: 0 0 8px;
-  font-size: 23px;
+  font-size: 25px;
   font-weight: 650;
   letter-spacing: -0.025em;
 }
@@ -525,14 +613,23 @@ onMounted(loadFeaturedApps)
 }
 .app-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 20px;
+}
+.app-grid > * {
+  grid-column: span 2;
+}
+.app-grid > .app-card-hero,
+.app-grid > .app-skeleton:first-child {
+  grid-column: span 3;
 }
 .empty-placeholder,
 .list-notice {
   text-align: center;
   padding: 44px 20px;
-  border-top: 1px solid var(--ui-line);
+  border: 1px dashed var(--ui-line-strong);
+  border-radius: 14px;
+  background: var(--ui-surface);
 }
 .empty-placeholder h3 {
   font-size: 16px;
@@ -547,13 +644,12 @@ onMounted(loadFeaturedApps)
 .list-notice {
   color: var(--ui-danger);
   background: var(--ui-danger-soft);
-  border-radius: 8px;
   border: 0;
 }
 .app-skeleton {
-  min-height: 240px;
+  min-height: 300px;
   padding: 32px 24px;
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--ui-surface);
 }
 .section-pagination {
@@ -565,6 +661,7 @@ onMounted(loadFeaturedApps)
   margin-top: 16px;
   padding: 16px;
   text-align: left;
+  color: var(--ui-danger);
   background: var(--ui-danger-soft);
   border-radius: 8px;
   overflow-wrap: anywhere;
@@ -576,40 +673,58 @@ onMounted(loadFeaturedApps)
   .app-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .app-grid > *,
+  .app-grid > .app-card-hero,
+  .app-grid > .app-skeleton:first-child {
+    grid-column: span 1;
+  }
   .hero-section {
-    padding-top: 48px;
+    padding-top: 64px;
   }
 }
 @media (max-width: 640px) {
   .hero-section {
-    padding: 36px 16px 28px;
+    padding: 52px 16px 36px;
   }
   .hero-title {
-    font-size: 30px;
+    font-size: 34px;
+    letter-spacing: -0.035em;
   }
   .hero-subtitle {
     font-size: 14px;
-    margin-bottom: 24px;
-  }
-  .prompt-box {
-    padding: 16px;
+    margin: 0 auto 28px;
+    max-width: 25em;
   }
   .prompt-options {
     align-items: flex-start;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    padding: 0 18px;
+  }
+  .prompt-options :deep(.ant-segmented-item-label) {
+    min-height: 36px;
+    line-height: 36px;
   }
   .prompt-actions {
     flex-wrap: wrap;
+    margin: 14px 18px 0;
+    padding-top: 12px;
   }
   .prompt-actions :deep(.knowledge-choice) {
     flex-basis: 100%;
     padding: 0;
+    gap: 8px 12px;
+  }
+  .prompt-actions :deep(.knowledge-switch),
+  .prompt-actions :deep(.knowledge-choice > a) {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
   }
   .submit-actions {
     margin-left: auto;
   }
-  .create-button {
+  .prompt-actions .create-button.ant-btn-primary {
     height: 44px;
   }
   .kbd-hint {
@@ -617,26 +732,29 @@ onMounted(loadFeaturedApps)
   }
   .sample-list {
     gap: 8px;
+    margin-top: 20px;
   }
   .sample-chip {
     min-height: 44px;
     padding: 8px 12px;
-    font-size: 12px;
   }
   .library {
     padding: 0 16px 32px;
   }
+  .app-section {
+    padding: 32px 0;
+  }
   .section-header {
     align-items: stretch;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
   }
   .section-search {
     width: 100%;
   }
   .app-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 18px;
   }
 }
 @media (hover: none) {

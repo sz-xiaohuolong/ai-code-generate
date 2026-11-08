@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import AuthPageShell from '@/components/AuthPageShell.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { userLogin } from '@/api/userController'
@@ -14,9 +15,12 @@ const formState = reactive<API.UserLoginRequest>({
   userPassword: '',
 })
 const submitting = ref(false)
+const submitError = ref('')
 
 const handleSubmit = async () => {
+  if (submitting.value) return
   submitting.value = true
+  submitError.value = ''
   try {
     const res = await userLogin(formState)
     if (res.data.code === 0 && res.data.data) {
@@ -33,8 +37,10 @@ const handleSubmit = async () => {
         await router.push('/')
       }
     } else {
-      message.error(res.data.message || '登录失败')
+      submitError.value = res.data.message || '登录失败，请重试'
     }
+  } catch {
+    submitError.value = '登录请求未完成，请检查网络后重试。'
   } finally {
     submitting.value = false
   }
@@ -42,83 +48,61 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="user-page">
-    <div class="form-panel">
-      <h1 class="form-title">用户登录</h1>
-      <a-form
-        :model="formState"
-        name="userLogin"
-        layout="vertical"
-        autocomplete="off"
-        @finish="handleSubmit"
+  <AuthPageShell title="欢迎回来。" description="登录创作空间，接着上次的灵感。">
+    <a-alert
+      v-if="submitError"
+      class="auth-error"
+      type="error"
+      :message="submitError"
+      show-icon
+      role="alert"
+    />
+    <a-form
+      :model="formState"
+      name="userLogin"
+      layout="vertical"
+      :disabled="submitting"
+      @finish="handleSubmit"
+    >
+      <a-form-item
+        label="账号"
+        name="userAccount"
+        :rules="[
+          { required: true, message: '请输入账号' },
+          { min: 4, message: '账号不能少于 4 位' },
+        ]"
       >
-        <a-form-item
-          label="账号"
-          name="userAccount"
-          :rules="[
-            { required: true, message: '请输入账号' },
-            { min: 4, message: '账号不能少于 4 位' },
-          ]"
-        >
-          <a-input v-model:value="formState.userAccount" placeholder="请输入账号" allow-clear />
-        </a-form-item>
+        <a-input
+          v-model:value="formState.userAccount"
+          placeholder="请输入账号（至少 4 位）"
+          autocomplete="username"
+          allow-clear
+        />
+      </a-form-item>
 
-        <a-form-item
-          label="密码"
-          name="userPassword"
-          :rules="[
-            { required: true, message: '请输入密码' },
-            { min: 8, message: '密码不能少于 8 位' },
-          ]"
-        >
-          <a-input-password
-            v-model:value="formState.userPassword"
-            placeholder="请输入密码"
-            allow-clear
-          />
-        </a-form-item>
+      <a-form-item
+        label="密码"
+        name="userPassword"
+        :rules="[
+          { required: true, message: '请输入密码' },
+          { min: 8, message: '密码不能少于 8 位' },
+        ]"
+      >
+        <a-input-password
+          v-model:value="formState.userPassword"
+          placeholder="请输入密码（至少 8 位）"
+          autocomplete="current-password"
+          allow-clear
+        />
+      </a-form-item>
 
-        <a-form-item>
-          <a-button type="primary" html-type="submit" block :loading="submitting">登录</a-button>
-        </a-form-item>
-      </a-form>
-      <div class="form-extra">
-        还没有账号？
-        <RouterLink to="/user/register">立即注册</RouterLink>
-      </div>
+      <a-form-item>
+        <a-button type="primary" html-type="submit" block :loading="submitting">登录</a-button>
+      </a-form-item>
+    </a-form>
+    <div class="form-extra">
+      还没有账号？
+      <RouterLink to="/user/register">立即注册</RouterLink>
     </div>
-  </div>
+  </AuthPageShell>
 </template>
-
-<style scoped>
-.user-page {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100dvh - 180px);
-  padding: 48px 16px;
-}
-
-.form-panel {
-  width: 100%;
-  max-width: 410px;
-  padding: 36px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line);
-  border-radius: 8px;
-}
-
-.form-title {
-  margin: 0 0 30px;
-  font-size: 25px;
-  font-weight: 700;
-  color: var(--ui-ink);
-}
-
-.form-extra {
-  padding-top: 18px;
-  border-top: 1px solid var(--ui-line);
-  text-align: center;
-  color: var(--ui-ink-soft);
-}
-</style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import AuthPageShell from '@/components/AuthPageShell.vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { userRegister } from '@/api/userController'
@@ -12,6 +13,7 @@ const formState = reactive<API.UserRegisterRequest>({
   checkPassword: '',
 })
 const submitting = ref(false)
+const submitError = ref('')
 
 const validateCheckPassword = async (_rule: unknown, value: string) => {
   if (!value) {
@@ -24,15 +26,19 @@ const validateCheckPassword = async (_rule: unknown, value: string) => {
 }
 
 const handleSubmit = async () => {
+  if (submitting.value) return
   submitting.value = true
+  submitError.value = ''
   try {
     const res = await userRegister(formState)
     if (res.data.code === 0 && res.data.data) {
       message.success('注册成功，请登录')
       await router.push('/user/login')
     } else {
-      message.error(res.data.message || '注册失败')
+      submitError.value = res.data.message || '注册失败，请重试'
     }
+  } catch {
+    submitError.value = '注册请求未完成，请检查网络后重试。'
   } finally {
     submitting.value = false
   }
@@ -40,95 +46,74 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="user-page">
-    <div class="form-panel">
-      <h1 class="form-title">用户注册</h1>
-      <a-form
-        :model="formState"
-        name="userRegister"
-        layout="vertical"
-        autocomplete="off"
-        @finish="handleSubmit"
+  <AuthPageShell title="让想法，有个开始。" description="创建账号，开启你的第一段 AI 应用创作。">
+    <a-alert
+      v-if="submitError"
+      class="auth-error"
+      type="error"
+      :message="submitError"
+      show-icon
+      role="alert"
+    />
+    <a-form
+      :model="formState"
+      name="userRegister"
+      layout="vertical"
+      :disabled="submitting"
+      @finish="handleSubmit"
+    >
+      <a-form-item
+        label="账号"
+        name="userAccount"
+        :rules="[
+          { required: true, message: '请输入账号' },
+          { min: 4, message: '账号不能少于 4 位' },
+        ]"
       >
-        <a-form-item
-          label="账号"
-          name="userAccount"
-          :rules="[
-            { required: true, message: '请输入账号' },
-            { min: 4, message: '账号不能少于 4 位' },
-          ]"
-        >
-          <a-input v-model:value="formState.userAccount" placeholder="请输入账号" allow-clear />
-        </a-form-item>
+        <a-input
+          v-model:value="formState.userAccount"
+          placeholder="请输入账号（至少 4 位）"
+          autocomplete="username"
+          allow-clear
+        />
+      </a-form-item>
 
-        <a-form-item
-          label="密码"
-          name="userPassword"
-          :rules="[
-            { required: true, message: '请输入密码' },
-            { min: 8, message: '密码不能少于 8 位' },
-          ]"
-        >
-          <a-input-password
-            v-model:value="formState.userPassword"
-            placeholder="请输入密码"
-            allow-clear
-          />
-        </a-form-item>
+      <a-form-item
+        label="密码"
+        name="userPassword"
+        :rules="[
+          { required: true, message: '请输入密码' },
+          { min: 8, message: '密码不能少于 8 位' },
+        ]"
+      >
+        <a-input-password
+          v-model:value="formState.userPassword"
+          placeholder="请输入密码（至少 8 位）"
+          autocomplete="new-password"
+          allow-clear
+        />
+      </a-form-item>
 
-        <a-form-item
-          label="确认密码"
-          name="checkPassword"
-          :rules="[{ validator: validateCheckPassword, trigger: 'change' }]"
-        >
-          <a-input-password
-            v-model:value="formState.checkPassword"
-            placeholder="请再次输入密码"
-            allow-clear
-          />
-        </a-form-item>
+      <a-form-item
+        label="确认密码"
+        name="checkPassword"
+        :rules="[{ validator: validateCheckPassword, trigger: 'change' }]"
+      >
+        <a-input-password
+          v-model:value="formState.checkPassword"
+          placeholder="请再次输入密码"
+          autocomplete="new-password"
+          allow-clear
+        />
+      </a-form-item>
 
-        <a-form-item>
-          <a-button type="primary" html-type="submit" block :loading="submitting">注册</a-button>
-        </a-form-item>
-      </a-form>
-      <div class="form-extra">
-        已有账号？
-        <RouterLink to="/user/login">去登录</RouterLink>
-      </div>
+      <a-form-item>
+        <a-button type="primary" html-type="submit" block :loading="submitting">注册</a-button>
+      </a-form-item>
+    </a-form>
+    <div class="form-extra">
+      已有账号？
+      <RouterLink to="/user/login">去登录</RouterLink>
     </div>
-  </div>
+  </AuthPageShell>
 </template>
-
-<style scoped>
-.user-page {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100dvh - 180px);
-  padding: 48px 16px;
-}
-
-.form-panel {
-  width: 100%;
-  max-width: 410px;
-  padding: 36px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line);
-  border-radius: 8px;
-}
-
-.form-title {
-  margin: 0 0 30px;
-  font-size: 25px;
-  font-weight: 700;
-  color: var(--ui-ink);
-}
-
-.form-extra {
-  padding-top: 18px;
-  border-top: 1px solid var(--ui-line);
-  text-align: center;
-  color: var(--ui-ink-soft);
-}
-</style>

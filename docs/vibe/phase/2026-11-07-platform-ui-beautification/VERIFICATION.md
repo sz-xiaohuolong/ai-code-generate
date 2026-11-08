@@ -71,3 +71,39 @@ node scripts/verify-platform-ui.mjs
 独立最终复审结论为 **ship**，记录见 `.evidence/ui-implementation-20261108/final-review.md`。发现的深色操作链接对比度问题已修复：ConfigProvider 的链接正常、悬停和按下颜色显式接入共享主题，深色实际对比度 7.016:1，新增 DOM 对比度断言通过。抽屉和深色编辑弹窗曾在入场动画首帧截图，已统一等待动画结束后重拍；封面放大预览也已保留并通过验收。无遗留发现。
 
 按项目持续授权仅提交本轮前端、验收脚本和文档并推送 `origin/main`，其他任务的后端／配置改动保留。功能提交 `a2d34c7fcc5b5ce11cb0e256a63d211028d1380a` 已推送，远程 `refs/heads/main` 与该完整哈希一致；本记录随文档收尾提交同步。未部署。
+
+## 追加验收：截图指定的登录与首页美化（2026-11-08）
+
+本轮仅调整登录／注册共享分栏、首页冷光与流线、输入轮播与提交粒子、Bento 作品卡及其真实元数据。以上历史章节中的 `ship` 与提交哈希属于上一轮交付；本轮功能检查已通过，独立完整复审提出一项图标收尾修正，最终复审结论由主线程补记。
+
+原始证据目录：`.evidence/ui-refinement-20261108/`。
+
+| 检查 | 当前结果 | 证据 |
+|---|---|---|
+| 前端单元测试 | 17 项通过，0 失败 | `unit-tests.log` |
+| 类型检查与生产构建 | 通过；保留既有大包体警告，登录图片产物为 68.33 kB | `build.log` |
+| 本轮 8 个 Vue 文件 ESLint／格式检查 | 主线程执行通过；lint 成功时无输出 | `lint.log`；格式检查执行结果见主线程记录 |
+| 生产 Chrome 受控验收 | 37 项通过，93 次受控请求，0 未捕获脚本异常 | `production/browser-results.json` |
+| 提交粒子补拍 | 输入区域 738×144px，位于视口内；`capturedWithParticles=true`，无脚本异常 | `production/particle-recapture.json`、`production/home-particles.png` |
+| Impeccable 静态检测 | 仅 1 项装饰网格建议；网格来自用户指定参考图，按本轮局部视觉要求保留 | `detector.json` |
+| 独立完整复审 | 结论为 `fix`：示例按钮原 Unicode 箭头需换为已有 Lucide SVG；源码已修正并重建、补拍，后续 verdict 将唯一修正项评为 resolved，disposition 为 ship | `.evidence/ui-refinement-20261108/finish-review.md`；ship 范围为前轮唯一修正项 |
+
+浏览器覆盖了空输入轮播与聚焦暂停、输入法组合键、需求与模式提交、失败保留输入、重复提交保护、知识库选择传递、卡片复制与部署入口、真实字段展示、深浅主题、减少动画、登录／注册校验及失败恢复、成功返回路径、手机表单与首页无横向溢出。原工作台抽屉、分栏、草稿、任务恢复与停止，以及三类管理员列表、操作和权限导航一并回归。
+
+浏览器 API 全部受控拦截，用户与作品封面为明确标注的验收样例。本轮未调用真实模型、未写入业务数据、未部署，也未据此声明真实后端或供应商端到端通过。工作台与管理员页面保留既有设计；其他任务修改的 `AGENTS.md` 和后端／配置文件不纳入本轮交付。
+
+### 本轮截图与复现
+
+- 登录：[桌面](../../../../.evidence/ui-refinement-20261108/production/login-desktop.png)、[手机](../../../../.evidence/ui-refinement-20261108/production/login-mobile.png)、[深色](../../../../.evidence/ui-refinement-20261108/production/login-dark.png)。
+- 注册：[桌面](../../../../.evidence/ui-refinement-20261108/production/register-desktop.png)、[手机](../../../../.evidence/ui-refinement-20261108/production/register-mobile.png)、[深色](../../../../.evidence/ui-refinement-20261108/production/register-dark.png)。
+- 首页：[桌面](../../../../.evidence/ui-refinement-20261108/production/home-desktop.png)、[手机](../../../../.evidence/ui-refinement-20261108/production/home-mobile.png)、[深色](../../../../.evidence/ui-refinement-20261108/production/home-dark.png)、[作品卡](../../../../.evidence/ui-refinement-20261108/production/home-bento.png)、[提交粒子补拍](../../../../.evidence/ui-refinement-20261108/production/home-particles.png)。
+
+沿用上文的测试、构建与生产预览命令；运行 `scripts/verify-platform-ui.mjs` 时将 `UI_EVIDENCE_DIR` 设为 `.evidence/ui-refinement-20261108/production`，`UI_TEST_URL` 指向本次生产预览地址。源码与阶段文档核对覆盖 `AuthPageShell.vue`、`HomeAtmosphere.vue`、`CreationPromptInput.vue`、`AppCard.vue`、`HomePage.vue`、两份认证页及 `BasicLayout.vue`；只追加本阶段记录，未新建全站设计文件。
+
+素材来源、许可证与 cix 取舍沿用方案的本轮追加章节：Pexels 本地图片附来源文件，Lucide 原始许可随 `public/licenses/lucide.txt` 分发；已检索 PaiFlow 登录样式，未采用外部实现。
+
+文档静态核验：三份阶段文档的历史正文与 `HEAD` 完全一致，本轮 11 个新增本地截图链接均存在，限定这三份文件的 `git diff --check` 通过。
+
+最终收尾：示例按钮替换为 12×12 Lucide SVG 后，生产构建、HomePage lint 与格式检查通过；同视口补拍首页桌面、手机、深色、Bento 与粒子共五张图。独立 reviewer 的 verdict 确认该唯一修正项 `resolved`，未发现此修正引入的回退，`disposition: ship`；这一 verdict 针对前轮修正清单，未冒充新的全页面审查。原完整复审已核验构图、素材、主题、真实元数据与功能边界。
+
+本地试用入口为 `http://localhost:5175/`，认证入口 `/user/login` 与 `/user/register`；最终 HTTP 检查返回前端 200，后端 `/api/user/get/login` 返回预期未登录码 40100。该连通性检查不等同于真实模型生成验收。代码同步按项目长期授权执行，提交编号以本轮 Git 历史和交付回复为准。
