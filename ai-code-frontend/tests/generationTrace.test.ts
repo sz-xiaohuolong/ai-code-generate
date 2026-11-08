@@ -44,3 +44,11 @@ test('步骤元数据只呈现受支持字段，解析失败不渲染任意内�
   ])
   assert.deepEqual(traceMetadata('invalid'), [])
 })
+
+
+test('追踪未初始化明确提示维护者处理，不能引导用户反复重试', () => {
+  assert.match(traceErrorText({ code: 50002 }), /尚未初始化/)
+  assert.match(traceErrorText({ code: 50002 }), /维护者/)
+  assert.doesNotMatch(traceErrorText({ code: 50002 }), /重新查询/)
+  assert.match(traceErrorText({ code: 40400 }), /采集失败/)
+})

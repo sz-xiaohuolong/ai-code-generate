@@ -115,7 +115,8 @@ export const traceErrorText = (error: unknown): string => {
   const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
   if (code === 40101) return '仅应用所有者或创建请求的发起用户可以查看追踪。'
   if (code === 40100) return '登录状态已失效，请重新登录后查看。'
-  if (code === 40400) return '记录尚未写入、不存在或已超过 7 天保留期；应用删除后也不可查询。'
+  if (code === 50002) return '追踪存储尚未初始化，请联系维护者完成初始化。此前未采集的过程无法补录，已有生成结果不受影响。'
+  if (code === 40400) return '记录尚未写入、采集失败、不存在或已超过 7 天保留期；应用删除后也不可查询。'
   return '追踪暂不可用，请重新查询。追踪查询不会改变生成任务的结果。'
 }
 export const traceMetadata = (value?: string | null): [string, string][] => {

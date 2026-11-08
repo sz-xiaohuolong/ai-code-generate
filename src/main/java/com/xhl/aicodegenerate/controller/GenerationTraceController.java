@@ -11,6 +11,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.web.bind.annotation.*;
 
+import java.sql.SQLException;
+
 /** 追踪只读入口；所有路径复用服务层的当前所有者和保留期校验。 */
 @RestController
 @RequestMapping("/app/traces")
@@ -53,7 +55,12 @@ public class GenerationTraceController {
     }
 
     @ExceptionHandler(DataAccessException.class)
-    public BaseResponse<?> unavailable() {
+    public BaseResponse<?> unavailable(DataAccessException error) {
+        // 只检查驱动错误码，不解析或回传可能包含库名、SQL、凭据的异常正文。
+        if (error.getMostSpecificCause() instanceof SQLException sql
+                && sql.getErrorCode() == 1146 && "42S02".equals(sql.getSQLState())) {
+            return ResultUtils.error(ErrorCode.TRACE_STORAGE_NOT_READY);
+        }
         // 不把数据库异常正文、SQL 或连接信息放进诊断响应。
         return ResultUtils.error(ErrorCode.OPERATION_ERROR, "追踪暂不可用，请稍后重试");
     }
