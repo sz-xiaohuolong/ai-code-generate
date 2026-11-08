@@ -413,24 +413,11 @@ onMounted(loadFeaturedApps)
   background: var(--ui-shell);
 }
 .hero-section {
-  --ui-ink: #f0f5ff;
-  --ui-ink-soft: #bfcbdd;
-  --ui-ink-faint: #a3b2c9;
-  --ui-accent: #b2cfff;
-  --ui-accent-hover: #d5e5ff;
-  --ui-accent-soft: #203553;
-  --ui-accent-border: #7193c3;
-  --ui-surface: #131d2d;
-  --ui-surface-muted: #1c293e;
-  --ui-line: #344359;
-  --ui-line-subtle: #2a374c;
-  --ui-danger: #ffc2c9;
-  --ui-danger-soft: #37222e;
   position: relative;
   isolation: isolate;
   overflow: hidden;
   padding: 90px 24px 64px;
-  background: #080d18;
+  background: var(--ui-shell);
   color: var(--ui-ink);
   color-scheme: dark;
 }
@@ -447,30 +434,48 @@ onMounted(loadFeaturedApps)
   font-weight: 650;
   line-height: 1.3;
   letter-spacing: -0.035em;
-  color: #f3f6fc;
+  color: var(--ui-ink);
   text-wrap: balance;
 }
 .hero-subtitle {
   margin: 0 0 36px;
   font-size: 15px;
   line-height: 1.8;
-  color: #bfcbdd;
+  color: var(--ui-ink-soft);
 }
 .creation-studio {
+  position: relative;
+  isolation: isolate;
   max-width: 740px;
   margin: auto;
 }
 .prompt-box {
   position: relative;
   padding: 0 0 18px;
-  background: #121c2be8;
-  border: 1px solid #ffffff29;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
   border-radius: 18px;
   text-align: left;
-  box-shadow: 0 24px 70px #0005;
+}
+/* 微光只围绕输入面板，不覆盖标题与作品区，也不阻拦输入。 */
+.prompt-box::before {
+  position: absolute;
+  inset: -42px -60px;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+  background: radial-gradient(ellipse, var(--ui-glow) 0%, var(--ui-glow-soft) 42%, transparent 70%);
+  filter: blur(24px);
+  opacity: 0.65;
+  animation: prompt-breathe 8s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
+}
+@keyframes prompt-breathe {
+  to {
+    opacity: 1;
+  }
 }
 .prompt-box:focus-within {
-  outline: 2px solid #8fb8f1;
+  outline: 2px solid var(--ui-accent);
   outline-offset: 3px;
 }
 .prompt-options {
@@ -480,26 +485,26 @@ onMounted(loadFeaturedApps)
   padding: 0 22px;
 }
 .prompt-options :deep(.ant-segmented) {
-  background: #080f1c;
+  background: var(--ui-shell);
   padding: 4px;
-  color: #b5c3d8;
+  color: var(--ui-ink-soft);
   border-radius: 8px;
 }
 .prompt-options :deep(.ant-segmented-item-selected),
 .prompt-options :deep(.ant-segmented-thumb) {
-  color: #edf4ff;
-  background: #2c3c53;
+  color: var(--ui-ink);
+  background: var(--ui-surface-hover);
   box-shadow: none;
   border-radius: 5px;
 }
 .prompt-options :deep(.ant-segmented-item:hover:not(.ant-segmented-item-disabled)) {
-  color: #fff;
+  color: var(--ui-ink);
 }
 .prompt-options :deep(.ant-segmented-item-disabled) {
-  color: #a3b2c9;
+  color: var(--ui-ink-faint);
 }
 .mode-description {
-  color: #a3b2c9;
+  color: var(--ui-ink-faint);
   font-size: 12px;
 }
 .prompt-actions {
@@ -509,7 +514,7 @@ onMounted(loadFeaturedApps)
   gap: 12px;
   margin: 16px 22px 0;
   padding-top: 16px;
-  border-top: 1px solid #ffffff14;
+  border-top: 1px solid var(--ui-line);
 }
 .prompt-actions :deep(.knowledge-choice) {
   flex: 1;
@@ -517,7 +522,7 @@ onMounted(loadFeaturedApps)
   font-size: 12px;
 }
 .prompt-actions :deep(.knowledge-choice a) {
-  color: #b2cfff;
+  color: var(--ui-accent);
 }
 .submit-actions {
   display: flex;
@@ -529,18 +534,19 @@ onMounted(loadFeaturedApps)
   height: 42px;
   padding: 0 18px;
   border-radius: 9px;
-  background: #edf4ff;
-  border-color: #edf4ff;
-  color: #142138;
+  background: var(--ui-action);
+  border-color: var(--ui-action);
+  box-shadow: var(--ui-shadow-action);
+  color: var(--ui-on-accent);
   font-weight: 600;
 }
 .prompt-actions .create-button.ant-btn-primary:not(:disabled):hover {
-  color: #142138;
-  background: #cadfff;
-  border-color: #cadfff;
+  color: var(--ui-on-accent);
+  background: var(--ui-action-hover);
+  border-color: var(--ui-action-hover);
 }
 .kbd-hint {
-  color: #a3b2c9;
+  color: var(--ui-ink-faint);
   font-size: 11px;
 }
 .sample-list {
@@ -556,10 +562,10 @@ onMounted(loadFeaturedApps)
   gap: 16px;
   min-height: 38px;
   padding: 8px 14px;
-  background: #111b2980;
-  border: 1px solid #ffffff1f;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line-strong);
   border-radius: 8px;
-  color: #bdcce0;
+  color: var(--ui-ink-soft);
   font-size: 12px;
   cursor: pointer;
   transition:
@@ -567,18 +573,20 @@ onMounted(loadFeaturedApps)
     border-color 0.18s;
 }
 .sample-chip span {
-  color: #a3b2c9;
+  color: var(--ui-ink-faint);
 }
 .sample-chip:hover:not(:disabled) {
-  color: #fff;
-  background: #22334b;
-  border-color: #7896bb;
+  color: var(--ui-ink);
+  background: var(--ui-surface-hover);
+  border-color: var(--ui-accent);
 }
 .sample-chip:disabled {
   cursor: default;
   opacity: 0.55;
 }
 .library {
+  color: var(--ui-ink);
+  background: var(--ui-shell);
   max-width: 1280px;
   padding: 20px 40px 64px;
   margin: 0 auto;
@@ -597,6 +605,7 @@ onMounted(loadFeaturedApps)
   margin-bottom: 26px;
 }
 .section-header h2 {
+  color: var(--ui-ink);
   text-wrap: balance;
   margin: 0 0 8px;
   font-size: 25px;
@@ -755,6 +764,11 @@ onMounted(loadFeaturedApps)
   .app-grid {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prompt-box::before {
+    animation: none;
   }
 }
 @media (hover: none) {

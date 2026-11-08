@@ -113,11 +113,11 @@ const handleLogout = async () => {
 .global-header {
   display: flex;
   align-items: center;
-  height: 58px;
+  height: 100%;
   max-width: 1760px;
   margin: 0 auto;
   padding: 0 32px;
-  gap: 32px;
+  gap: 40px;
 }
 
 .brand-link {
@@ -140,8 +140,9 @@ const handleLogout = async () => {
 }
 
 .brand-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .primary-nav {
@@ -165,7 +166,7 @@ const handleLogout = async () => {
   align-items: center;
   padding: 0 12px;
   color: var(--ui-ink-soft);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   transition: color 180ms ease;
@@ -194,19 +195,6 @@ const handleLogout = async () => {
   flex: none;
 }
 
-.new-app-mode {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 8px;
-}
-
-.mode-label {
-  font-size: 12px;
-  color: var(--ui-ink-faint);
-  white-space: nowrap;
-}
-
 .mobile-navigation {
   display: none;
 }
@@ -215,7 +203,7 @@ const handleLogout = async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 40px;
   padding: 4px 8px;
   color: var(--ui-ink);
   background: transparent;
@@ -249,15 +237,11 @@ const handleLogout = async () => {
   }
 
   .brand-name {
-    display: none;
+    font-size: 14px;
   }
 
-  .mode-label {
-    display: none;
-  }
-
-  .new-app-mode {
-    margin-right: 0;
+  .header-right {
+    gap: 4px;
   }
 
   .primary-nav {
@@ -266,47 +250,13 @@ const handleLogout = async () => {
 
   .mobile-navigation {
     display: inline-flex;
+    min-width: 40px;
+    height: 40px;
   }
 
   .user-name,
   .dropdown-arrow {
     display: none;
-  }
-}
-</style>
-
-<style scoped>
-.global-header {
-  height: 64px;
-  padding: 0 32px;
-  gap: 40px;
-}
-.brand-name {
-  font-size: 15px;
-  letter-spacing: -0.02em;
-}
-.nav-link {
-  font-size: 14px;
-}
-.user-entry {
-  min-height: 40px;
-}
-@media (max-width: 760px) {
-  .global-header {
-    height: 58px;
-    padding: 0 16px;
-    gap: 12px;
-  }
-  .brand-name {
-    display: inline;
-    font-size: 14px;
-  }
-  .header-right {
-    gap: 4px;
-  }
-  .mobile-navigation {
-    min-width: 40px;
-    height: 40px;
   }
 }
 </style>

@@ -1,19 +1,35 @@
+/* 固定暗色语义色板；App.vue 从这里读取 Ant Design Vue 的主题值。 */
 :root {
-  color-scheme: light;
-  --ui-shell: #f8fafc;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: #f1f5f9;
-  --ui-surface-hover: #e2e8f0;
-  --ui-line: #e2e8f0;
-  --ui-line-strong: #cbd5e1;
-  --ui-line-subtle: #f1f5f9;
-  --ui-ink: #0f172a;
-  --ui-ink-soft: #475569;
-  --ui-ink-faint: #64748b;
-  --ui-accent: #2563eb;
-  --ui-accent-hover: #1d4ed8;
-  --ui-accent-soft: #eff6ff;
-  --ui-accent-border: #bfdbfe;
+  color-scheme: dark;
+  --ui-shell: #090d16;
+  --ui-surface: #121a27;
+  --ui-surface-muted: #182232;
+  --ui-surface-hover: #222f43;
+  --ui-line: rgba(255, 255, 255, 0.08);
+  --ui-line-strong: #65758c;
+  --ui-line-subtle: rgba(255, 255, 255, 0.05);
+  --ui-ink: #f1f5f9;
+  --ui-ink-soft: #b5c2d4;
+  --ui-ink-faint: #94a3b8;
+  --ui-accent: #7aa7ff;
+  --ui-accent-hover: #a0c1ff;
+  --ui-accent-soft: #1b2b45;
+  --ui-accent-border: rgba(122, 167, 255, 0.25);
+  --ui-action: #5b95ff;
+  --ui-action-hover: #80adff;
+  --ui-on-accent: #071226;
+  --ui-danger: #ff9b9b;
+  --ui-danger-soft: #392327;
+  --ui-success: #86d7bb;
+  --ui-success-soft: #1a3530;
+  --ui-warning: #f0c47c;
+  --ui-warning-soft: #382e21;
+  --ui-header-glass: rgba(9, 13, 22, 0.8);
+  --ui-header-height: 64px;
+  --ui-glow: rgba(122, 167, 255, 0.12);
+  --ui-glow-soft: rgba(122, 167, 255, 0.04);
+  --ui-shadow-card-hover: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--ui-accent-border);
+  --ui-shadow-action: 0 6px 20px -8px rgba(91, 149, 255, 0.5);
   --ui-radius-sm: 6px;
   --ui-radius: 8px;
   --ui-radius-lg: 12px;
@@ -21,10 +37,12 @@
   --ui-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --ui-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
   --ui-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --ui-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-  --ui-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+  --ui-shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.55);
+  --ui-shadow-xl: 0 24px 56px -16px rgba(0, 0, 0, 0.6);
   --ui-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'PingFang SC', sans-serif;
   font-size: 14px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -32,42 +50,10 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (max-width: 760px) {
   :root {
-    color-scheme: dark;
-    --ui-shell: #090d16;
-    --ui-surface: #111827;
-    --ui-surface-muted: #1e293b;
-    --ui-surface-hover: #334155;
-    --ui-line: #1f2937;
-    --ui-line-strong: #374151;
-    --ui-line-subtle: #1e293b;
-    --ui-ink: #f8fafc;
-    --ui-ink-soft: #cbd5e1;
-    --ui-ink-faint: #94a3b8;
-    --ui-accent: #3b82f6;
-    --ui-accent-hover: #60a5fa;
-    --ui-accent-soft: rgba(59, 130, 246, 0.15);
-    --ui-accent-border: rgba(59, 130, 246, 0.35);
+    --ui-header-height: 58px;
   }
-}
-
-[data-theme='dark'] {
-  color-scheme: dark;
-  --ui-shell: #090d16;
-  --ui-surface: #111827;
-  --ui-surface-muted: #1e293b;
-  --ui-surface-hover: #334155;
-  --ui-line: #1f2937;
-  --ui-line-strong: #374151;
-  --ui-line-subtle: #1e293b;
-  --ui-ink: #f8fafc;
-  --ui-ink-soft: #cbd5e1;
-  --ui-ink-faint: #94a3b8;
-  --ui-accent: #3b82f6;
-  --ui-accent-hover: #60a5fa;
-  --ui-accent-soft: rgba(59, 130, 246, 0.15);
-  --ui-accent-border: rgba(59, 130, 246, 0.35);
 }
 
 *,
@@ -96,7 +82,7 @@ select {
 }
 
 ::selection {
-  color: #fff;
+  color: var(--ui-on-accent);
   background: var(--ui-accent);
 }
 

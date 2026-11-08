@@ -215,7 +215,9 @@ const copyPrompt = async (e: Event) => {
   border-radius: 16px;
   overflow: hidden;
   isolation: isolate;
-  transition: border-color 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 .app-card::after {
   content: '';
@@ -226,13 +228,14 @@ const copyPrompt = async (e: Event) => {
   opacity: 0;
   background: radial-gradient(
     440px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-    #6aa5ef26,
+    var(--ui-glow),
     transparent 70%
   );
   transition: opacity 0.2s;
 }
 .app-card:hover {
   border-color: var(--ui-accent-border);
+  box-shadow: var(--ui-shadow-card-hover);
 }
 .app-card:hover::after {
   opacity: 1;
@@ -288,21 +291,25 @@ const copyPrompt = async (e: Event) => {
   gap: 7px;
   top: 16px;
   right: 16px;
-  border: 1px solid #ffffff30;
+  border: 1px solid var(--ui-line);
   border-radius: 6px;
   padding: 5px 9px;
-  background: #152237e8;
-  color: #f0f4fa;
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink-soft);
   font-size: 11px;
 }
 .deploy-state > span {
   width: 5px;
   height: 5px;
-  background: #c3cddd;
+  background: var(--ui-ink-faint);
   border-radius: 50%;
 }
+.deploy-state.deployed {
+  color: var(--ui-success);
+  background: var(--ui-success-soft);
+}
 .deploy-state.deployed > span {
-  background: #8ce1bc;
+  background: var(--ui-success);
 }
 .card-body {
   display: flex;

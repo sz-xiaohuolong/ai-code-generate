@@ -15,6 +15,7 @@ const errors = []
 page.on('pageerror', error => errors.push(error.message))
 const requests = []
 const checks = []
+const contrasts = []
 const state = { role: 'admin', failure: '', empty: false, createFailure: false, delay: 0, activeTask: null, longName: false, createDelay: 0, authFailure: false, authNetworkFailure: false }
 const avatar = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" rx="20" fill="#e4ecfb"/><text x="20" y="26" text-anchor="middle" font-size="18" fill="#305bad">林</text></svg>')
 const person = { id: '1001', userName: '林舟', userAccount: 'linzhou', userRole: 'admin', userAvatar: avatar }
@@ -103,6 +104,72 @@ try {
     assert.equal(await page.locator('.global-header .ant-segmented').count(), 0)
     assert.equal(await page.getByRole('button', { name: '开始生成', exact: true }).count(), 1)
   })
+  await check('系统浅色偏好下全站仍为暗色，顶栏与首页基底连续', async () => {
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
+    for (const selector of ['body', '.hero-section', '.library', '.layout-footer']) {
+      assert.equal(await page.locator(selector).evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(9, 13, 22)')
+    }
+    const header = await page.locator('.layout-header').evaluate(el => {
+      const style = getComputedStyle(el)
+      return { background: style.backgroundColor, blur: style.backdropFilter, height: style.height, border: style.borderBottomColor }
+    })
+    assert.deepEqual(header, { background: 'rgba(9, 13, 22, 0.8)', blur: 'blur(16px)', height: '64px', border: 'rgba(255, 255, 255, 0.08)' })
+    assert.equal(await page.locator('.global-header').evaluate(el => getComputedStyle(el).height), '63px')
+  })
+  await check('网格与全屏聚光移除，流线安静且微光贴合输入框', async () => {
+    assert.equal(await page.locator('.stage-grid, .spotlight').count(), 0)
+    assert.equal(await page.locator('.background-lines').evaluate(el => getComputedStyle(el).opacity), '0.04')
+    const glow = await page.locator('.prompt-box').evaluate(el => {
+      const style = getComputedStyle(el, '::before')
+      return { width: parseFloat(style.width), height: parseFloat(style.height), pointer: style.pointerEvents }
+    })
+    assert.ok(glow.width < 900 && glow.height < 500)
+    assert.equal(glow.pointer, 'none')
+  })
+  await check('示例、提示、输入与主按钮满足实测对比度', async () => {
+    const pairs = await page.evaluate(() => {
+      const ratio = (foreground, background) => {
+        const luminance = color => {
+          const rgb = color.match(/[\d.]+/g).slice(0, 3).map(value => {
+            const channel = Number(value) / 255
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+          })
+          return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+        }
+        const a = luminance(foreground), b = luminance(background)
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+      }
+      const style = selector => getComputedStyle(document.querySelector(selector))
+      const chip = style('.sample-chip'), prompt = style('.prompt-box'), action = style('.create-button'), shell = style('.hero-section')
+      const search = style('.section-search input')
+      return [
+        { name: '示例文字', ratio: ratio(chip.color, chip.backgroundColor), min: 4.5 },
+        { name: '示例边框与内侧', ratio: ratio(chip.borderColor, chip.backgroundColor), min: 3 },
+        { name: '示例边框与外侧', ratio: ratio(chip.borderColor, shell.backgroundColor), min: 3 },
+        { name: '轮播提示', ratio: ratio(style('.prompt-placeholder').color, prompt.backgroundColor), min: 4.5 },
+        { name: '主按钮文字', ratio: ratio(action.color, action.backgroundColor), min: 4.5 },
+        { name: '主按钮边界', ratio: ratio(action.backgroundColor, prompt.backgroundColor), min: 3 },
+        { name: '搜索文字', ratio: ratio(search.color, search.backgroundColor), min: 4.5 },
+        { name: '作品辅文案', ratio: ratio(style('.card-prompt').color, style('.app-card').backgroundColor), min: 4.5 },
+      ]
+    })
+    contrasts.push(...pairs)
+    for (const pair of pairs) assert.ok(pair.ratio >= pair.min, `${pair.name}：${pair.ratio.toFixed(2)}:1`)
+    await page.locator('.sample-chip').first().focus()
+    assert.ok(await page.locator('.sample-chip').first().evaluate(el => {
+      const style = getComputedStyle(el)
+      return style.outlineStyle === 'solid' && parseFloat(style.outlineWidth) >= 2
+    }))
+    await page.locator('.sample-chip').first().blur()
+  })
+  await check('深色作品卡片与部署胶囊融入统一表面', async () => {
+    const style = await page.locator('.app-card').first().evaluate(el => {
+      const css = getComputedStyle(el)
+      return { background: css.backgroundColor, border: css.borderColor }
+    })
+    assert.deepEqual(style, { background: 'rgb(18, 26, 39)', border: 'rgba(255, 255, 255, 0.08)' })
+    assert.equal(await page.locator('.deploy-state.deployed').first().evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(26, 53, 48)')
+  })
   await shot('home-desktop')
   await shot('home-full', true)
   await check('空输入轮播示例，聚焦后暂停轮播', async () => {
@@ -122,6 +189,7 @@ try {
     assert.ok((await cards.first().innerText()).includes('已部署'))
     await cards.first().hover({ position: { x: 100, y: 100 } })
     assert.ok(await cards.first().evaluate(el => el.style.getPropertyValue('--pointer-x').length > 0))
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.app-card')).boxShadow.includes('32px'))
     await shot('home-bento', true)
   })
   await check('复制提示词与部署入口保留原行为', async () => {
@@ -327,6 +395,11 @@ try {
     await check(`${name} 手机无整页横向溢出`, noOverflow)
     await shot(`${name}-mobile`, true)
   }
+  await page.setViewportSize({ width: 834, height: 1112 })
+  await page.goto(origin)
+  await page.locator('.app-card').first().waitFor()
+  await check('平板首页、导航与双列作品无横向溢出', noOverflow)
+  await shot('home-tablet', true)
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' })
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(`${origin}/admin/userManage`)
@@ -347,7 +420,7 @@ try {
     })
     assert.ok(ratio >= 4.5, `链接对比度 ${ratio.toFixed(2)}:1`)
   })
-  await check('系统深色主题同时覆盖页面和弹窗', async () => {
+  await check('系统偏好变化后仍保持暗色，弹窗继承统一表面', async () => {
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
     await page.getByRole('button', { name: '编辑', exact: true }).first().click()
     await page.locator('.ant-modal:visible, .ant-drawer-content-wrapper:visible').waitFor()
@@ -382,6 +455,7 @@ try {
     await page.goto(origin)
     await page.locator('.prompt-placeholder').waitFor()
     assert.equal(await page.locator('.line-light').first().evaluate(el => getComputedStyle(el).animationName), 'none')
+    assert.equal(await page.locator('.prompt-box').evaluate(el => getComputedStyle(el, '::before').animationName), 'none')
     const hint = await page.locator('.prompt-placeholder').innerText()
     await page.waitForTimeout(4400)
     assert.equal(await page.locator('.prompt-placeholder').innerText(), hint)
@@ -479,6 +553,6 @@ try {
   await shot('failure', true)
   throw error
 } finally {
-  await writeFile(resolve(evidence, 'browser-results.json'), JSON.stringify({ checks, errors, requestCount: requests.length, scope: '真实 Chrome + 受控 API 数据；未验证真实后端或供应商' }, null, 2))
+  await writeFile(resolve(evidence, 'browser-results.json'), JSON.stringify({ checks, contrasts, errors, requestCount: requests.length, scope: '真实 Chrome + 受控 API 数据；未验证真实后端或供应商' }, null, 2))
   await browser.close()
 }

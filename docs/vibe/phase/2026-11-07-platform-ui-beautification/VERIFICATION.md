@@ -107,3 +107,27 @@ node scripts/verify-platform-ui.mjs
 最终收尾：示例按钮替换为 12×12 Lucide SVG 后，生产构建、HomePage lint 与格式检查通过；同视口补拍首页桌面、手机、深色、Bento 与粒子共五张图。独立 reviewer 的 verdict 确认该唯一修正项 `resolved`，未发现此修正引入的回退，`disposition: ship`；这一 verdict 针对前轮修正清单，未冒充新的全页面审查。原完整复审已核验构图、素材、主题、真实元数据与功能边界。
 
 本地试用入口为 `http://localhost:5175/`，认证入口 `/user/login` 与 `/user/register`；最终 HTTP 检查返回前端 200，后端 `/api/user/get/login` 返回预期未登录码 40100。该连通性检查不等同于真实模型生成验收。代码同步按项目长期授权执行，提交编号以本轮 Git 历史和交付回复为准。
+
+
+## 追加验收：全站暗色与视觉收敛（2026-11-08）
+
+本轮覆盖 `colorize / quieter / polish` 明确要求。旧章节中的网格保留、跟随系统切换深浅主题仅适用于历史交付；当前已删除网格并固定全站暗色。证据位于 `.evidence/ui-dark-polish-20261108/`。
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| 类型检查与生产构建 | 通过；保留既有 Ant Design Vue 分包体积提示 | `build.log` |
+| 原有前端单测 | 17 项通过，0 失败 | `test.log` |
+| 7 个改动 Vue 文件 ESLint 与格式 | 通过 | `lint.log`、`format.log` |
+| 生产 Chrome 受控回归 | 42 项通过，96 次受控请求，无未捕获脚本异常 | `production/browser-results.json`、`browser.log` |
+| 暗色一致性 | 系统浅色／深色均保持暗色；首页与作品区同为 `rgb(9,13,22)`；顶栏 16px 磨砂，桌面 64px | 浏览器回归及首页截图 |
+| 真实对比度 | 示例文字 9.67:1；边框内／外侧 3.72:1、4.14:1；轮播提示 6.81:1；主按钮文字 6.40:1，边界 5.98:1 | `production/browser-results.json` 的 `contrasts` |
+| 清理与机械检测 | 三个指定组件 62 处 Hex 字面量降至 0；网格移除；单次 detector 无发现 | `detector.json`、`source-audit.json` |
+| 响应式与视觉复核 | 1440px 桌面、834px 平板、390px 手机首页；原工作台额外覆盖 320px 长名称；无整页横向溢出 | `production/` 截图与脚本断言 |
+
+功能回归覆盖生成模式与需求提交、失败保留输入、重复提交保护、输入法组合键、轮播暂停、粒子、知识库选择传递、作品复制和部署入口、管理筛选／分页／编辑／删除确认、权限路由、抽屉焦点与草稿、工作台分栏、任务恢复与停止、登录注册。减少动画偏好同时停止微光、流线、轮播与粒子。全部 API 均由验收替身拦截，未调用真实模型或写入业务数据，不声明真实供应商端到端验证。
+
+截图：[首页桌面](../../../../.evidence/ui-dark-polish-20261108/production/home-desktop.png)、[首页手机](../../../../.evidence/ui-dark-polish-20261108/production/home-mobile.png)、[首页平板](../../../../.evidence/ui-dark-polish-20261108/production/home-tablet.png)、[作品区](../../../../.evidence/ui-dark-polish-20261108/production/home-bento.png)、[管理页](../../../../.evidence/ui-dark-polish-20261108/production/admin-users-desktop.png)、[工作台](../../../../.evidence/ui-dark-polish-20261108/production/workbench-desktop.png)。截图中的用户与作品为明确标注的受控样例，作品自身的浅色画面保留。
+
+复现：在前端目录执行 `yarn test`、`yarn build`；在仓库根目录执行 `UI_TEST_URL=http://127.0.0.1:4173 UI_EVIDENCE_DIR=.evidence/ui-dark-polish-20261108/production node scripts/verify-platform-ui.mjs`。浏览器脚本使用已安装的 Playwright，非本项目模块时通过 `PLAYWRIGHT_MODULE` 指定实际路径。
+
+本地预览继续运行在 `http://localhost:5175/`。提交／推送按长期授权执行；最终编号见 Git 历史及交付回复。其他任务的知识库页面、文档地图、AGENTS、后端与配置修改不属于本轮提交。

@@ -45,7 +45,7 @@ function vanish(): Promise<void> {
     const context = surface.getContext('2d')
     if (!painter || !context || !width || !height) return Promise.resolve()
     painter.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-    painter.fillStyle = '#fff'
+    painter.fillStyle = style.color
     painter.textBaseline = 'top'
     const padding = parseFloat(style.paddingLeft)
     const lineHeight = parseFloat(style.lineHeight)
@@ -181,23 +181,23 @@ defineExpose({ focus: () => input.value?.focus(), vanish, cancel })
   border: 0;
   border-radius: 16px;
   background: transparent;
-  color: #f0f5ff;
-  caret-color: #b5d3ff;
+  color: var(--ui-ink);
+  caret-color: var(--ui-accent);
   font: inherit;
   font-size: 16px;
   line-height: 1.8;
   outline: none;
-  scrollbar-color: #53647d transparent;
+  scrollbar-color: var(--ui-line-strong) transparent;
 }
 .prompt-input textarea::selection {
-  color: #fff;
-  background: #426da6;
+  color: var(--ui-on-accent);
+  background: var(--ui-accent);
 }
 .prompt-placeholder {
   position: absolute;
   inset: 24px;
   pointer-events: none;
-  color: #b2bed2;
+  color: var(--ui-ink-faint);
   font-size: 16px;
   line-height: 1.8;
 }

@@ -1,7 +1,7 @@
 /* Hallmark · shape: app screen · genre: modern-minimal · theme: Cobalt / Ink（按已批准方案适配）
  * 导航：原有顶栏与管理页签；核心对象：创作输入、双栏预览、数据记录。
  * 状态：加载、空、错误、完整；字体：中文系统无衬线；表面：平面与细线。
- * 颜色由 App.vue 同步给 CSS 与 Ant Design Vue；原始主题 scaffold 保留在本轮证据目录。
+ * 颜色由 base.css 统一定义，App.vue 读取后映射给 Ant Design Vue；原始主题 scaffold 保留在本轮证据目录。
  * 适配：管理员主动作沿用蓝色，删除与错误保留红色；不复制主题营销页构图。
  */
 /* Hallmark · finish-review: subagent · 1 项产品问题已解决，截图证据已重拍 · gap: none */
@@ -29,12 +29,12 @@ body .ant-btn {
 }
 body .ant-btn-primary {
   color: var(--ui-on-accent);
-  background: var(--ui-accent);
+  background: var(--ui-action);
   box-shadow: none;
 }
 body .ant-btn-primary:not(:disabled):hover {
   color: var(--ui-on-accent);
-  background: var(--ui-accent-hover);
+  background: var(--ui-action-hover);
   transform: none;
   box-shadow: none;
 }
