@@ -60,7 +60,7 @@ onBeforeUnmount(() => { epoch++; window.removeEventListener('knowledge-documents
       <ul class="reference-list">
         <li v-for="record in records" :key="record.taskId">
           <button type="button" :disabled="loading" @click="show(record)">
-            {{ new Date(record.createdAt).toLocaleString('zh-CN') }} · {{ labels[record.state] || '记录状态未知' }}
+            {{ new Date(Number(record.createdAt)).toLocaleString('zh-CN') }} · {{ labels[record.state] || '记录状态未知' }}
           </button>
         </li>
       </ul>

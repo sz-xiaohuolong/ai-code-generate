@@ -45,12 +45,12 @@ const storageRemaining = computed(() =>
 const statusLabel = (status: string) =>
   ({ READY: '已就绪', PROCESSING: '处理中', FAILED: '处理失败' })[status] ?? '状态待确认'
 const fileType = (name: string) => (name.toLowerCase().endsWith('.md') ? 'Markdown' : 'TXT')
-const createdDate = (value: number) =>
+const createdDate = (value: number | string) =>
   new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date(value))
+  }).format(new Date(Number(value)))
 const retryIds = new Map<string, string>()
 let disposed = false
 let timer: ReturnType<typeof setTimeout> | undefined

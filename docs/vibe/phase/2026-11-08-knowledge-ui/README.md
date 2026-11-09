@@ -33,6 +33,14 @@
 
 ## 验证结果
 
+### 2026-11-09：知识库持续加载修复
+
+后端 `JsonConfig` 将 `Long` 与 `long` 序列化为字符串。知识库详情将字符串毫秒时间戳直接传入 `new Date()`，日期格式化抛出 `RangeError: Invalid time value`，Vue 更新失败后保留加载中的旧画面。仅将响应中的时间戳换成数字即可恢复，排除了容量字符串与加载状态复位问题。
+
+修复在日期显示处先执行 `Number()`，同时修正知识库参考记录的同类问题及时间戳类型。验收数据改用后端真实的字符串时间戳：修改前同一浏览器验收在等待容量出现时失败，修改后 18 项通过；17 项现有单测、类型检查和生产构建通过。证据位于 `.evidence/knowledge-loading-20261109/`。验证使用本地真实 Chrome、受控接口，未读取用户浏览器会话。
+
+按仓库要求完成 cix-workspace `my-vault` 检索，读取 `pai-study/paicoding/paicoding-miniapp/utils/date.js`；未采用外部实现，使用 JavaScript 标准数值转换处理本项目接口契约。
+
 验证状态：VERIFIED（受控前端范围）；交付状态：RELEASED（代码同步）。功能提交 `bc1075a` 已推送 `origin/main`，并核对完整哈希 `bc1075afd4913f30de9f39fda91992998c387fd6` 一致；未部署。
 
 - `yarn build`：类型检查与生产构建通过。仅保留既有 Ant Design Vue 大 chunk 提示。

@@ -12,13 +12,14 @@ const page = await context.newPage()
 page.setDefaultTimeout(10000)
 const errors = [], checks = [], requests = []
 page.on('pageerror', error => errors.push(error.message))
+// 后端 JsonConfig 将 long 时间戳序列化为字符串，避免仅用数字测试漏掉日期渲染异常。
 const baseDocuments = [
   { id: '101', name: '产品接口说明.md', status: 'READY', activeVersionId: '201', activeVersionNo: 2, pendingVersionNo: 2, byteSize: 25840 },
   { id: '102', name: '会员与积分规则.md', status: 'READY', activeVersionId: '202', activeVersionNo: 1, pendingVersionNo: 1, byteSize: 18620 },
   { id: '103', name: '订单状态与支付回调.md', status: 'PROCESSING', activeVersionId: '203', activeVersionNo: 1, pendingVersionNo: 2, byteSize: 32900 },
   { id: '104', name: '品牌文案与写作规范.txt', status: 'FAILED', activeVersionId: '204', activeVersionNo: 1, pendingVersionNo: 2, byteSize: 14600, errorCode: 'INDEX_INCOMPLETE' },
   { id: '105', name: '项目命名约定.txt', status: 'READY', activeVersionId: '205', activeVersionNo: 1, pendingVersionNo: 1, byteSize: 4750 },
-].map((item, i) => ({ pendingVersionId: String(301 + i), revision: 3, createdAt: 1793980800000 + i * 1000, errorCode: null, ...item }))
+].map((item, i) => ({ pendingVersionId: String(301 + i), revision: 3, createdAt: String(1793980800000 + i * 1000), errorCode: null, ...item }))
 let records = structuredClone(baseDocuments)
 const quota = { usedBytes: 9673114, maxTotalBytes: 20971520, documents: 5, maxDocuments: 50, maxFileBytes: 2097152 }
 const state = { enabled: true, failList: false, delay: 0, abortUpload: false, retryAbort: false, listCalls: 0, readyOnNextPoll: false }

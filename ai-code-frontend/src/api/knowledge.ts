@@ -4,12 +4,12 @@ import { TaskApiError } from '@/api/generationTask'
 export type KnowledgeDocument = {
   id: string; name: string; activeVersionId: string | null; activeVersionNo: number | null
   pendingVersionId: string; pendingVersionNo: number; status: string; errorCode: string | null
-  revision: number; byteSize: number; createdAt: number
+  revision: number; byteSize: number; createdAt: number | string
 }
 export type KnowledgeQuota = { usedBytes: number; documents: number; maxFileBytes: number; maxTotalBytes: number; maxDocuments: number }
 export type KnowledgePage = { records: KnowledgeDocument[]; total: number; quota: KnowledgeQuota; enabled: boolean }
 export type KnowledgeReference = {
-  taskId: string; appId: string; userMessageId: string | null; aiMessageId: string | null; state: string; createdAt: number
+  taskId: string; appId: string; userMessageId: string | null; aiMessageId: string | null; state: string; createdAt: number | string
   items: { documentName: string; versionNo: number; text: string | null }[]
 }
 const unwrap = <T>(response: { data: { code: number; message?: string; data: T } }): T => {
