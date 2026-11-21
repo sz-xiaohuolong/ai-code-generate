@@ -1,44 +1,46 @@
-/* 固定暗色语义色板；App.vue 从这里读取 Ant Design Vue 的主题值。 */
+/* 全站明亮蓝白语义色板；App.vue 从这里读取 Ant Design Vue 的主题值。 */
 :root {
-  color-scheme: dark;
-  --ui-shell: #090d16;
-  --ui-surface: #121a27;
-  --ui-surface-muted: #182232;
-  --ui-surface-hover: #222f43;
-  --ui-line: rgba(255, 255, 255, 0.08);
-  --ui-line-strong: #65758c;
-  --ui-line-subtle: rgba(255, 255, 255, 0.05);
-  --ui-ink: #f1f5f9;
-  --ui-ink-soft: #b5c2d4;
-  --ui-ink-faint: #94a3b8;
-  --ui-accent: #7aa7ff;
-  --ui-accent-hover: #a0c1ff;
-  --ui-accent-soft: #1b2b45;
-  --ui-accent-border: rgba(122, 167, 255, 0.25);
-  --ui-action: #5b95ff;
-  --ui-action-hover: #80adff;
-  --ui-on-accent: #071226;
-  --ui-danger: #ff9b9b;
-  --ui-danger-soft: #392327;
-  --ui-success: #86d7bb;
-  --ui-success-soft: #1a3530;
-  --ui-warning: #f0c47c;
-  --ui-warning-soft: #382e21;
-  --ui-header-glass: rgba(9, 13, 22, 0.8);
+  color-scheme: light;
+  --ui-shell: #f8fafd;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #f1f5fb;
+  --ui-surface-hover: #e6eef9;
+  --ui-line: rgba(15, 23, 42, 0.08);
+  --ui-line-strong: #cbd5e1;
+  --ui-line-subtle: rgba(15, 23, 42, 0.05);
+  --ui-ink: #111827;
+  --ui-ink-soft: #475569;
+  --ui-ink-faint: #64748b;
+  --ui-accent: #2563eb;
+  --ui-accent-hover: #1d4ed8;
+  --ui-accent-soft: #eff6ff;
+  --ui-accent-border: rgba(37, 99, 235, 0.24);
+  --ui-action: #2563eb;
+  --ui-action-hover: #1d4ed8;
+  --ui-on-accent: #ffffff;
+  --ui-danger: #c81e32;
+  --ui-danger-soft: #fff1f2;
+  --ui-success: #16654a;
+  --ui-success-soft: #edf8f3;
+  --ui-warning: #8a5a0d;
+  --ui-warning-soft: #fef7e6;
+  --ui-header-glass: rgba(248, 250, 253, 0.8);
   --ui-header-height: 64px;
-  --ui-glow: rgba(122, 167, 255, 0.12);
-  --ui-glow-soft: rgba(122, 167, 255, 0.04);
-  --ui-shadow-card-hover: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--ui-accent-border);
-  --ui-shadow-action: 0 6px 20px -8px rgba(91, 149, 255, 0.5);
+  --ui-glow: rgba(96, 165, 250, 0.22);
+  --ui-glow-soft: rgba(147, 197, 253, 0.1);
+  --ui-shadow-card-hover:
+    0 14px 34px -12px rgba(37, 99, 235, 0.14), 0 4px 12px -4px rgba(15, 23, 42, 0.06),
+    0 0 0 1px var(--ui-accent-border);
+  --ui-shadow-action: 0 8px 20px -8px rgba(37, 99, 235, 0.45);
   --ui-radius-sm: 6px;
   --ui-radius: 8px;
   --ui-radius-lg: 12px;
   --ui-radius-xl: 16px;
-  --ui-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --ui-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
-  --ui-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --ui-shadow-lg: 0 16px 40px -12px rgba(0, 0, 0, 0.55);
-  --ui-shadow-xl: 0 24px 56px -16px rgba(0, 0, 0, 0.6);
+  --ui-shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --ui-shadow-sm: 0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
+  --ui-shadow-md: 0 8px 20px -6px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04);
+  --ui-shadow-lg: 0 18px 40px -14px rgba(15, 23, 42, 0.12), 0 4px 12px -4px rgba(15, 23, 42, 0.05);
+  --ui-shadow-xl: 0 24px 56px -16px rgba(15, 23, 42, 0.14);
   --ui-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial,

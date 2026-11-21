@@ -416,10 +416,9 @@ onMounted(loadFeaturedApps)
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding: 90px 24px 64px;
+  padding: 108px 24px 80px;
   background: var(--ui-shell);
   color: var(--ui-ink);
-  color-scheme: dark;
 }
 .hero-inner {
   position: relative;
@@ -430,15 +429,15 @@ onMounted(loadFeaturedApps)
 }
 .hero-title {
   margin: 0 0 20px;
-  font-size: clamp(36px, 4.2vw, 60px);
-  font-weight: 650;
-  line-height: 1.3;
-  letter-spacing: -0.035em;
+  font-size: clamp(36px, 4.2vw, 56px);
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.03em;
   color: var(--ui-ink);
   text-wrap: balance;
 }
 .hero-subtitle {
-  margin: 0 0 36px;
+  margin: 0 0 38px;
   font-size: 15px;
   line-height: 1.8;
   color: var(--ui-ink-soft);
@@ -452,31 +451,24 @@ onMounted(loadFeaturedApps)
 .prompt-box {
   position: relative;
   padding: 0 0 18px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line);
-  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(147, 197, 253, 0.36);
+  border-radius: 24px;
+  box-shadow:
+    0 14px 40px -14px rgba(37, 99, 235, 0.16),
+    0 4px 14px -4px rgba(15, 23, 42, 0.05);
   text-align: left;
-}
-/* 微光只围绕输入面板，不覆盖标题与作品区，也不阻拦输入。 */
-.prompt-box::before {
-  position: absolute;
-  inset: -42px -60px;
-  z-index: -1;
-  content: '';
-  pointer-events: none;
-  background: radial-gradient(ellipse, var(--ui-glow) 0%, var(--ui-glow-soft) 42%, transparent 70%);
-  filter: blur(24px);
-  opacity: 0.65;
-  animation: prompt-breathe 8s cubic-bezier(0.22, 1, 0.36, 1) infinite alternate;
-}
-@keyframes prompt-breathe {
-  to {
-    opacity: 1;
-  }
+  transition:
+    border-color 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .prompt-box:focus-within {
-  outline: 2px solid var(--ui-accent);
-  outline-offset: 3px;
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow:
+    0 18px 46px -14px rgba(37, 99, 235, 0.24),
+    0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 .prompt-options {
   display: flex;
@@ -485,17 +477,20 @@ onMounted(loadFeaturedApps)
   padding: 0 22px;
 }
 .prompt-options :deep(.ant-segmented) {
-  background: var(--ui-shell);
-  padding: 4px;
+  background: var(--ui-surface-muted);
+  padding: 3px;
   color: var(--ui-ink-soft);
-  border-radius: 8px;
+  border-radius: 999px;
+}
+.prompt-options :deep(.ant-segmented-item) {
+  border-radius: 999px;
 }
 .prompt-options :deep(.ant-segmented-item-selected),
 .prompt-options :deep(.ant-segmented-thumb) {
   color: var(--ui-ink);
-  background: var(--ui-surface-hover);
-  box-shadow: none;
-  border-radius: 5px;
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-xs);
+  border-radius: 999px;
 }
 .prompt-options :deep(.ant-segmented-item:hover:not(.ant-segmented-item-disabled)) {
   color: var(--ui-ink);
@@ -532,8 +527,8 @@ onMounted(loadFeaturedApps)
 }
 .prompt-actions .create-button.ant-btn-primary {
   height: 42px;
-  padding: 0 18px;
-  border-radius: 9px;
+  padding: 0 20px;
+  border-radius: 999px;
   background: var(--ui-action);
   border-color: var(--ui-action);
   box-shadow: var(--ui-shadow-action);
@@ -559,26 +554,30 @@ onMounted(loadFeaturedApps)
 .sample-chip {
   display: inline-flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   min-height: 38px;
-  padding: 8px 14px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line-strong);
-  border-radius: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--ui-line);
+  border-radius: 999px;
+  box-shadow: var(--ui-shadow-xs);
   color: var(--ui-ink-soft);
   font-size: 12px;
   cursor: pointer;
   transition:
     background 0.18s,
-    border-color 0.18s;
+    border-color 0.18s,
+    box-shadow 0.18s,
+    color 0.18s;
 }
 .sample-chip span {
   color: var(--ui-ink-faint);
 }
 .sample-chip:hover:not(:disabled) {
   color: var(--ui-ink);
-  background: var(--ui-surface-hover);
-  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  border-color: var(--ui-accent-border);
+  box-shadow: var(--ui-shadow-sm);
 }
 .sample-chip:disabled {
   cursor: default;
@@ -764,11 +763,6 @@ onMounted(loadFeaturedApps)
   .app-grid {
     grid-template-columns: 1fr;
     gap: 18px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .prompt-box::before {
-    animation: none;
   }
 }
 @media (hover: none) {

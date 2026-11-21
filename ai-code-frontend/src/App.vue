@@ -8,11 +8,11 @@ import { useLoginUserStore } from '@/stores/loginUser'
 
 const loginUserStore = useLoginUserStore()
 
-// 固定暗色工作台；CSS 语义变量是页面与 Ant Design Vue 的唯一色彩来源。
+// 固定明亮蓝白浅色工作台；CSS 语义变量是页面与 Ant Design Vue 的唯一色彩来源。
 const rootStyles = getComputedStyle(document.documentElement)
 const color = (name: string) => rootStyles.getPropertyValue(`--ui-${name}`).trim()
 const antdTheme: ThemeConfig = {
-  algorithm: theme.darkAlgorithm,
+  algorithm: theme.defaultAlgorithm,
   token: {
     colorPrimary: color('action'),
     colorLink: color('accent'),
