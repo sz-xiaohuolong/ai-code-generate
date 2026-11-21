@@ -176,7 +176,6 @@ onBeforeUnmount(() => {
   <section class="knowledge-page" aria-label="个人知识库管理">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">工作空间 <span aria-hidden="true">/</span> 你的资料</p>
         <h1>个人知识库</h1>
         <p class="page-description">让生成结果，更懂你的业务。</p>
       </div>
@@ -212,110 +211,112 @@ onBeforeUnmount(() => {
     </div>
     <div class="knowledge-workspace">
       <div class="documents-column">
-        <div class="list-toolbar">
-          <div class="list-heading">
-            <h2>我的文档</h2>
-            <span v-if="data" class="document-count">{{ data.total }} 份</span>
+        <div class="documents-card">
+          <div class="list-toolbar">
+            <div class="list-heading">
+              <h2>我的文档</h2>
+              <span v-if="data" class="document-count">{{ data.total }} 份</span>
+            </div>
+            <a-button class="refresh-button" :loading="loading" @click="load">
+              <svg v-if="!loading" class="icon" aria-hidden="true">
+                <use :href="`${knowledgeIcons}#refresh-cw`" /></svg
+              >刷新状态
+            </a-button>
           </div>
-          <a-button class="refresh-button" :loading="loading" @click="load">
-            <svg v-if="!loading" class="icon" aria-hidden="true">
-              <use :href="`${knowledgeIcons}#refresh-cw`" /></svg
-            >刷新状态
-          </a-button>
-        </div>
-        <a-alert v-if="error" class="list-error" type="error" :message="error" show-icon />
-        <div v-if="loading && !data" class="loading-state" role="status">
-          <a-spin /><span>正在加载资料</span>
-        </div>
-        <div v-else-if="!data && error" class="empty-state">
-          <h3>资料暂时没加载出来</h3>
-          <p>点击“刷新状态”再试一次。</p>
-        </div>
-        <div v-else-if="!data?.records.length" class="empty-state">
-          <svg class="empty-icon" aria-hidden="true">
-            <use :href="`${knowledgeIcons}#file-text`" />
-          </svg>
-          <h3>从第一份资料开始</h3>
-          <p>接口说明，或一份业务规则。</p>
-          <p>上传后，让 AI 有据可依。</p>
-          <a-button :disabled="busy || !!pending || !data?.enabled" @click="choose()"
-            >上传第一份文档</a-button
-          >
-        </div>
-        <template v-else>
-          <div class="list-columns" aria-hidden="true">
-            <span>文档名称</span><span>处理状态</span><span>操作</span>
+          <a-alert v-if="error" class="list-error" type="error" :message="error" show-icon />
+          <div v-if="loading && !data" class="loading-state" role="status">
+            <a-spin /><span>正在加载资料</span>
           </div>
-          <ul class="document-list" aria-label="知识文档">
-            <li
-              v-for="document in data.records"
-              :key="document.id"
-              :class="{ selected: selectedDocument?.id === document.id }"
+          <div v-else-if="!data && error" class="empty-state">
+            <h3>资料暂时没加载出来</h3>
+            <p>点击“刷新状态”再试一次。</p>
+          </div>
+          <div v-else-if="!data?.records.length" class="empty-state">
+            <svg class="empty-icon" aria-hidden="true">
+              <use :href="`${knowledgeIcons}#file-text`" />
+            </svg>
+            <h3>从第一份资料开始</h3>
+            <p>接口说明，或一份业务规则。</p>
+            <p>上传后，让 AI 有据可依。</p>
+            <a-button :disabled="busy || !!pending || !data?.enabled" @click="choose()"
+              >上传第一份文档</a-button
             >
-              <div class="document-main">
-                <div class="file-symbol" aria-hidden="true">
-                  <svg class="icon"><use :href="`${knowledgeIcons}#file-text`" /></svg>
+          </div>
+          <template v-else>
+            <div class="list-columns" aria-hidden="true">
+              <span>文档名称</span><span>处理状态</span><span>操作</span>
+            </div>
+            <ul class="document-list" aria-label="知识文档">
+              <li
+                v-for="document in data.records"
+                :key="document.id"
+                :class="{ selected: selectedDocument?.id === document.id }"
+              >
+                <div class="document-main">
+                  <div class="file-symbol" aria-hidden="true">
+                    <svg class="icon"><use :href="`${knowledgeIcons}#file-text`" /></svg>
+                  </div>
+                  <div class="document-info">
+                    <button
+                      class="document-name"
+                      :aria-pressed="selectedDocument?.id === document.id"
+                      aria-controls="knowledge-document-details"
+                      @click="selectDocument(document.id)"
+                    >
+                      {{ document.name }}
+                    </button>
+                    <p class="document-meta">
+                      {{ fileType(document.name) }} <span>·</span> {{ bytes(document.byteSize) }}
+                      <span>·</span>
+                      {{
+                        document.activeVersionNo
+                          ? `可用 v${document.activeVersionNo}`
+                          : '尚无可用版本'
+                      }}
+                    </p>
+                    <p v-if="document.status === 'PROCESSING'" class="document-note" role="status">
+                      正在处理 v{{ document.pendingVersionNo }}。{{
+                        document.activeVersionId ? '旧版仍可用于生成。' : '完成后即可检索。'
+                      }}
+                    </p>
+                    <p v-else-if="document.status === 'FAILED'" class="document-note failure">
+                      v{{ document.pendingVersionNo }} 处理失败。{{ failure(document.errorCode)
+                      }}{{ document.activeVersionId ? ' 旧版仍可用。' : '' }}
+                    </p>
+                  </div>
                 </div>
-                <div class="document-info">
+                <span class="status-label" :class="document.status.toLowerCase()"
+                  ><i aria-hidden="true" />{{ statusLabel(document.status) }}</span
+                >
+                <div class="document-actions">
+                  <a-button
+                    v-if="document.status === 'FAILED'"
+                    class="retry-button"
+                    size="small"
+                    :disabled="busy || !data?.enabled"
+                    @click="retry(document)"
+                    >重新处理</a-button
+                  >
                   <button
-                    class="document-name"
+                    class="detail-button"
+                    :aria-label="`查看 ${document.name} 的详情`"
                     :aria-pressed="selectedDocument?.id === document.id"
                     aria-controls="knowledge-document-details"
                     @click="selectDocument(document.id)"
                   >
-                    {{ document.name }}
+                    <svg class="icon" aria-hidden="true">
+                      <use :href="`${knowledgeIcons}#chevron-right`" />
+                    </svg>
                   </button>
-                  <p class="document-meta">
-                    {{ fileType(document.name) }} <span>·</span> {{ bytes(document.byteSize) }}
-                    <span>·</span>
-                    {{
-                      document.activeVersionNo
-                        ? `可用 v${document.activeVersionNo}`
-                        : '尚无可用版本'
-                    }}
-                  </p>
-                  <p v-if="document.status === 'PROCESSING'" class="document-note" role="status">
-                    正在处理 v{{ document.pendingVersionNo }}。{{
-                      document.activeVersionId ? '旧版仍可用于生成。' : '完成后即可检索。'
-                    }}
-                  </p>
-                  <p v-else-if="document.status === 'FAILED'" class="document-note failure">
-                    v{{ document.pendingVersionNo }} 处理失败。{{ failure(document.errorCode)
-                    }}{{ document.activeVersionId ? ' 旧版仍可用。' : '' }}
-                  </p>
                 </div>
-              </div>
-              <span class="status-label" :class="document.status.toLowerCase()"
-                ><i aria-hidden="true" />{{ statusLabel(document.status) }}</span
-              >
-              <div class="document-actions">
-                <a-button
-                  v-if="document.status === 'FAILED'"
-                  class="retry-button"
-                  size="small"
-                  :disabled="busy || !data?.enabled"
-                  @click="retry(document)"
-                  >重新处理</a-button
-                >
-                <button
-                  class="detail-button"
-                  :aria-label="`查看 ${document.name} 的详情`"
-                  :aria-pressed="selectedDocument?.id === document.id"
-                  aria-controls="knowledge-document-details"
-                  @click="selectDocument(document.id)"
-                >
-                  <svg class="icon" aria-hidden="true">
-                    <use :href="`${knowledgeIcons}#chevron-right`" />
-                  </svg>
-                </button>
-              </div>
-            </li>
-          </ul>
-          <div class="list-footer">
-            <span>显示 {{ data?.records.length }} / {{ data?.total }} 份文档</span
-            ><span>选择文档，查看详情</span>
-          </div>
-        </template>
+              </li>
+            </ul>
+            <div class="list-footer">
+              <span>显示 {{ data?.records.length }} / {{ data?.total }} 份文档</span
+              ><span>选择文档，查看详情</span>
+            </div>
+          </template>
+        </div>
         <div class="privacy-note">
           <svg class="icon" aria-hidden="true">
             <use :href="`${knowledgeIcons}#lock-keyhole`" />
@@ -474,41 +475,50 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .knowledge-page {
-  --kb-accent: var(--ui-success);
-  --kb-accent-soft: var(--ui-success-soft);
+  --kb-accent: var(--ui-accent);
+  --kb-accent-soft: var(--ui-accent-soft);
+  --kb-card-border: rgba(147, 197, 253, 0.34);
+  --kb-card-shadow:
+    0 14px 36px -16px rgba(37, 99, 235, 0.14), 0 4px 12px -4px rgba(15, 23, 42, 0.04);
+  position: relative;
+  isolation: isolate;
   width: min(100%, 1280px);
   margin: 0 auto;
-  padding: 16px 12px 32px;
+  padding: 20px 12px 40px;
   color: var(--ui-ink);
-  background: radial-gradient(
-    ellipse at 92% 0%,
-    color-mix(in srgb, var(--kb-accent) 5%, transparent),
-    transparent 42%
-  );
+}
+.knowledge-page::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+  background:
+    radial-gradient(
+      52% 48% at 86% 10%,
+      rgba(162, 209, 255, 0.42) 0%,
+      rgba(205, 231, 255, 0.22) 44%,
+      transparent 74%
+    ),
+    radial-gradient(40% 36% at 64% 6%, rgba(191, 222, 255, 0.24) 0%, transparent 70%);
 }
 .page-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 34px;
-}
-.eyebrow {
-  display: flex;
-  gap: 12px;
-  margin: 0 0 18px;
-  color: var(--ui-ink-faint);
-  font-size: 12px;
+  margin-bottom: 28px;
 }
 h1 {
   margin: 0;
   font-size: 30px;
-  line-height: 1.35;
-  letter-spacing: -1px;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
   font-weight: 650;
+  color: var(--ui-ink);
 }
 .page-description {
-  margin: 9px 0 0;
+  margin: 8px 0 0;
   color: var(--ui-ink-soft);
   font-size: 14px;
 }
@@ -527,17 +537,20 @@ h1 {
 }
 .upload-button {
   height: 42px;
-  padding: 0 20px;
-  border-radius: 8px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 600;
 }
 .knowledge-page .upload-button:not(:disabled) {
-  background: var(--kb-accent);
-  border-color: var(--kb-accent);
-  color: var(--ui-surface);
+  background: var(--ui-action);
+  border-color: var(--ui-action);
+  color: var(--ui-on-accent);
+  box-shadow: var(--ui-shadow-action);
 }
 .knowledge-page .upload-button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--kb-accent) 86%, var(--ui-ink));
-  border-color: transparent;
+  background: var(--ui-action-hover);
+  border-color: var(--ui-action-hover);
+  color: var(--ui-on-accent);
 }
 .file-picker {
   display: none;
@@ -553,35 +566,45 @@ h1 {
   padding: 14px 18px;
   background: var(--ui-warning-soft);
   color: var(--ui-warning);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow-wrap: anywhere;
 }
 .knowledge-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 304px;
   align-items: start;
-  gap: 30px;
+  gap: 26px;
 }
 .documents-column {
   min-width: 0;
   padding-bottom: 12px;
 }
+.documents-card {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--kb-card-border);
+  border-radius: 18px;
+  box-shadow: var(--kb-card-shadow);
+  overflow: hidden;
+}
 h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 650;
+  color: var(--ui-ink);
 }
 .list-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 2px 0 20px;
+  padding: 18px 22px;
 }
 .list-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .document-count {
   color: var(--ui-ink-faint);
@@ -590,9 +613,17 @@ h2 {
 }
 .refresh-button {
   height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
   font-size: 12px;
-  background: transparent;
+  background: var(--ui-surface);
   border-color: var(--ui-line-strong);
+  color: var(--ui-ink-soft);
+}
+.refresh-button:not(:disabled):hover {
+  color: var(--kb-accent);
+  border-color: var(--ui-accent-border);
+  background: var(--kb-accent-soft);
 }
 .list-columns,
 .document-list li {
@@ -602,11 +633,11 @@ h2 {
   align-items: center;
 }
 .list-columns {
-  padding: 12px 18px;
+  padding: 12px 22px;
   font-size: 12px;
   color: var(--ui-ink-soft);
   border-block: 1px solid var(--ui-line);
-  background: color-mix(in srgb, var(--ui-surface-muted) 60%, transparent);
+  background: #f4f8fd;
 }
 .list-columns span:last-child {
   white-space: nowrap;
@@ -620,41 +651,37 @@ h2 {
 }
 .document-list li {
   position: relative;
-  min-height: 90px;
-  padding: 20px 18px;
-  border-bottom: 1px solid var(--ui-line);
-  transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  min-height: 88px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--ui-line-subtle);
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .document-list li:hover {
-  background: color-mix(in srgb, var(--ui-surface-hover) 55%, transparent);
+  background: rgba(239, 246, 255, 0.55);
 }
 .document-list li.selected {
-  background: var(--kb-accent-soft);
-}
-.document-list li.selected::before {
-  position: absolute;
-  content: '';
-  inset: 16px auto 16px 0;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--kb-accent);
+  background: rgba(239, 246, 255, 0.9);
 }
 .document-main {
   display: flex;
   align-items: flex-start;
-  gap: 13px;
+  gap: 14px;
   min-width: 0;
 }
 .file-symbol {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 42px;
+  width: 38px;
+  height: 44px;
   flex-shrink: 0;
-  border: 1px solid var(--ui-line);
-  border-radius: 7px;
-  background: var(--ui-surface);
+  border: 1px solid rgba(147, 197, 253, 0.42);
+  border-radius: 10px;
+  background: linear-gradient(145deg, var(--kb-accent-soft), var(--ui-surface));
   color: var(--kb-accent);
+}
+.document-list li.selected .file-symbol {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: linear-gradient(145deg, #dbeafe, var(--ui-surface));
 }
 .file-symbol .icon {
   width: 20px;
@@ -732,7 +759,7 @@ h2 {
 }
 .retry-button {
   font-size: 11px;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 .detail-button {
   display: grid;
@@ -741,10 +768,16 @@ h2 {
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   color: var(--ui-ink-soft);
   background: transparent;
   cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.document-list li.selected .detail-button {
+  color: var(--kb-accent);
 }
 .detail-button:hover {
   background: var(--ui-surface);
@@ -754,7 +787,7 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  padding: 16px 4px;
+  padding: 14px 22px;
   font-size: 11px;
   color: var(--ui-ink-faint);
 }
@@ -762,32 +795,39 @@ h2 {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-top: 32px;
-  padding: 20px 0;
-  border-top: 1px solid var(--ui-line);
+  margin-top: 22px;
+  padding: 8px 6px;
   color: var(--ui-ink-faint);
 }
 .privacy-note .icon {
   margin-top: 2px;
+  color: var(--ui-ink-soft);
 }
 .privacy-note strong {
   color: var(--ui-ink-soft);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .privacy-note p {
-  margin: 7px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
   line-height: 1.7;
 }
 .knowledge-sidebar {
-  border-left: 1px solid var(--ui-line);
-  padding-left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   min-width: 0;
 }
 .document-details {
   scroll-margin-top: 80px;
-  padding: 8px 0 24px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--kb-card-border);
+  border-radius: 18px;
+  box-shadow: var(--kb-card-shadow);
 }
 .section-heading {
   display: flex;
@@ -796,33 +836,40 @@ h2 {
   gap: 12px;
 }
 .detail-type {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--kb-accent-soft);
+  color: var(--kb-accent);
   font-size: 11px;
-  color: var(--ui-ink-faint);
+  font-weight: 500;
 }
 .detail-file-symbol {
   display: grid;
   place-items: center;
-  width: 50px;
-  height: 58px;
-  margin: 26px 0 16px;
+  width: 52px;
+  height: 56px;
+  margin: 22px 0 14px;
   color: var(--kb-accent);
-  background: linear-gradient(145deg, var(--kb-accent-soft), var(--ui-surface));
-  border: 1px solid var(--ui-line);
-  border-radius: 9px;
+  background: linear-gradient(145deg, #dbeafe, var(--kb-accent-soft));
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  border-radius: 12px;
 }
 .detail-file-symbol svg {
-  width: 27px;
-  height: 27px;
+  width: 26px;
+  height: 26px;
 }
 .detail-filename {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 16px;
   font-weight: 600;
-  line-height: 1.6;
+  line-height: 1.55;
+  color: var(--ui-ink);
   overflow-wrap: anywhere;
 }
 .document-facts {
-  margin: 24px 0 0;
+  margin: 20px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-line-subtle);
 }
 .document-facts > div {
   display: flex;
@@ -837,13 +884,14 @@ h2 {
 .document-facts dd {
   margin: 0;
   color: var(--ui-ink);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .detail-note {
-  margin: 16px 0;
+  margin: 14px 0 18px;
   color: var(--ui-ink-soft);
   font-size: 12px;
-  line-height: 1.8;
+  line-height: 1.75;
 }
 .detail-note.failure {
   color: var(--ui-danger);
@@ -851,14 +899,20 @@ h2 {
 .detail-actions {
   display: flex;
   gap: 10px;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 .detail-actions .ant-btn {
   flex: 1;
+  border-radius: 10px;
   font-size: 12px;
 }
 .detail-actions .ant-btn-dangerous:not(:disabled) {
   color: var(--ui-danger);
+  border-color: rgba(200, 30, 50, 0.35);
+  background: var(--ui-surface);
+}
+.detail-actions .ant-btn-dangerous:not(:disabled):hover {
+  background: var(--ui-danger-soft);
   border-color: var(--ui-danger);
 }
 .delete-description {
@@ -867,94 +921,124 @@ h2 {
   line-height: 1.8;
 }
 .storage-panel {
-  margin-top: 16px;
-  padding: 20px;
-  border: 1px solid #39493d;
-  border-radius: 12px;
-  color: #f2f5ed;
-  background: radial-gradient(ellipse at 0% 0%, #344837, transparent 85%), #1d2922;
+  padding: 22px;
+  border: 1px solid rgba(147, 197, 253, 0.48);
+  border-radius: 18px;
+  color: var(--ui-ink);
+  background:
+    radial-gradient(
+      ellipse at 18% 0%,
+      rgba(162, 209, 255, 0.5) 0%,
+      rgba(214, 235, 255, 0.24) 48%,
+      transparent 82%
+    ),
+    radial-gradient(ellipse at 92% 100%, rgba(191, 219, 254, 0.28) 0%, transparent 68%),
+    var(--ui-surface);
+  box-shadow:
+    0 14px 36px -16px rgba(37, 99, 235, 0.16),
+    0 4px 12px -4px rgba(15, 23, 42, 0.04);
+}
+.storage-panel.storage-warning {
+  border-color: rgba(217, 119, 6, 0.38);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(254, 215, 170, 0.45) 0%, transparent 78%),
+    var(--ui-surface);
 }
 .storage-panel h2 {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 650;
 }
 .storage-panel .icon {
-  color: #b6c7b8;
+  color: var(--kb-accent);
+}
+.storage-panel.storage-warning .icon {
+  color: var(--ui-warning);
 }
 .storage-amount {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 24px 0 16px;
+  margin: 20px 0 14px;
   font-variant-numeric: tabular-nums;
 }
 .storage-amount strong {
-  font-size: 21px;
-  font-weight: 550;
-  letter-spacing: -0.5px;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  color: var(--ui-ink);
 }
 .storage-amount > span {
-  color: #bac9bd;
-  font-size: 11px;
+  color: var(--ui-ink-faint);
+  font-size: 12px;
 }
 .storage-meter {
-  height: 22px;
-  background: repeating-linear-gradient(90deg, #526256 0 3px, transparent 3px 7px);
-  border-radius: 2px;
+  height: 20px;
+  background: repeating-linear-gradient(90deg, #dbe7f6 0 3px, transparent 3px 7px);
+  border-radius: 3px;
   overflow: hidden;
 }
 .storage-meter > span {
   display: block;
   height: 100%;
-  background: repeating-linear-gradient(90deg, #b5d792 0 3px, #243329 3px 7px);
+  background: repeating-linear-gradient(90deg, #2563eb 0 3px, transparent 3px 7px);
 }
 .storage-caption {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 11px;
-  color: #bdcdbf;
+  margin-top: 10px;
+  color: var(--ui-ink-soft);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .storage-caption strong {
-  font-weight: 500;
-  color: #dbe9d3;
+  font-weight: 600;
+  color: var(--kb-accent);
 }
 .storage-documents {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #415347;
-  color: #bdcdbf;
-  font-size: 11px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(147, 197, 253, 0.34);
+  color: var(--ui-ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .storage-documents strong {
-  color: #f2f5ed;
-  font-weight: 500;
+  color: var(--ui-ink);
+  font-weight: 600;
 }
 .storage-notice {
-  margin: 16px 0 0;
+  margin: 14px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ui-warning-soft);
   font-size: 12px;
-  line-height: 1.7;
-  color: #ffd2b5;
+  line-height: 1.65;
+  color: var(--ui-warning);
 }
 .storage-warning .storage-meter > span {
-  background: repeating-linear-gradient(90deg, #f4a882 0 3px, #243329 3px 7px);
+  background: repeating-linear-gradient(90deg, #d97706 0 3px, transparent 3px 7px);
+}
+.storage-warning .storage-caption strong {
+  color: var(--ui-warning);
+}
+.storage-warning .storage-documents {
+  border-top-color: rgba(217, 119, 6, 0.24);
 }
 .storage-placeholder {
-  margin: 22px 0 0;
-  color: #bdcdbf;
+  margin: 20px 0 0;
+  color: var(--ui-ink-faint);
   font-size: 12px;
 }
 .upload-hint {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin: 14px 2px 0;
+  gap: 4px;
+  margin: -4px 4px 0;
   color: var(--ui-ink-faint);
   font-size: 11px;
   line-height: 1.7;
@@ -963,26 +1047,28 @@ h2 {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 240px;
+  min-height: 220px;
   padding: 40px 24px;
   font-size: 13px;
   color: var(--ui-ink-soft);
   border-top: 1px solid var(--ui-line);
 }
 .empty-state {
-  padding: 42px 24px 52px;
+  padding: 44px 24px 52px;
   border-top: 1px solid var(--ui-line);
   background: radial-gradient(ellipse at 0% 0%, var(--kb-accent-soft), transparent 75%);
 }
 .empty-icon {
   width: 32px;
   height: 32px;
-  color: var(--ui-ink-faint);
+  color: var(--kb-accent);
+  opacity: 0.75;
 }
 .empty-state h3 {
   margin: 20px 0 12px;
   font-size: 20px;
-  font-weight: 550;
+  font-weight: 600;
+  color: var(--ui-ink);
 }
 .empty-state p {
   margin: 5px 0;
@@ -991,26 +1077,24 @@ h2 {
 }
 .empty-state .ant-btn {
   margin-top: 24px;
+  border-radius: 999px;
 }
 .details-placeholder {
-  padding: 32px 0 12px;
+  padding: 28px 0 8px;
   color: var(--ui-ink-faint);
   font-size: 12px;
 }
 .list-error {
-  margin-bottom: 14px;
+  margin: 0 22px 16px;
 }
 button:focus-visible {
   outline: 2px solid var(--kb-accent);
-  outline-offset: 4px;
+  outline-offset: 3px;
 }
 @media (max-width: 1100px) {
   .knowledge-workspace {
-    grid-template-columns: minmax(0, 1fr) 270px;
-    gap: 22px;
-  }
-  .knowledge-sidebar {
-    padding-left: 20px;
+    grid-template-columns: minmax(0, 1fr) 276px;
+    gap: 20px;
   }
   .list-columns,
   .document-list li {
@@ -1035,25 +1119,20 @@ button:focus-visible {
   }
   .knowledge-workspace {
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: 20px;
   }
   .knowledge-sidebar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 260px;
-    gap: 0 28px;
-    padding: 24px 0 0;
-    border-left: 0;
-    border-top: 1px solid var(--ui-line);
+    grid-template-columns: minmax(0, 1fr) 268px;
+    gap: 16px 20px;
+    align-items: start;
   }
   .document-details {
     grid-row: span 2;
   }
-  .storage-panel {
-    align-self: start;
-    margin: 0;
-  }
   .upload-hint {
     grid-column: 2;
+    margin: -4px 2px 0;
   }
   .privacy-note {
     margin-top: 16px;
@@ -1061,25 +1140,20 @@ button:focus-visible {
 }
 @media (max-width: 540px) {
   .page-heading {
-    align-items: flex-start;
+    align-items: center;
     gap: 14px;
-    margin-bottom: 28px;
-  }
-  .eyebrow {
-    margin-bottom: 14px;
-    font-size: 11px;
+    margin-bottom: 22px;
   }
   h1 {
-    font-size: 26px;
+    font-size: 25px;
   }
   .page-description {
     font-size: 12px;
-    max-width: 180px;
-    line-height: 1.7;
+    max-width: 210px;
+    line-height: 1.65;
   }
   .upload-button {
-    margin-top: 28px;
-    padding: 0 12px;
+    padding: 0 14px;
     height: 38px;
     font-size: 12px;
   }
@@ -1087,8 +1161,11 @@ button:focus-visible {
     width: 14px;
     height: 14px;
   }
+  .list-toolbar {
+    padding: 14px 16px;
+  }
   .list-columns {
-    padding: 10px 8px;
+    padding: 10px 16px;
   }
   .list-columns,
   .document-list li {
@@ -1096,7 +1173,7 @@ button:focus-visible {
     gap: 8px;
   }
   .document-list li {
-    padding: 18px 8px 18px 12px;
+    padding: 16px;
   }
   .document-main {
     gap: 9px;
@@ -1112,19 +1189,21 @@ button:focus-visible {
     gap: 5px;
   }
   .list-footer {
+    padding: 12px 16px;
     font-size: 10px;
   }
   .knowledge-sidebar {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
   }
-  .document-details {
-    padding-bottom: 28px;
+  .document-details,
+  .storage-panel {
+    padding: 18px;
   }
   .detail-file-symbol {
-    margin-top: 20px;
-  }
-  .storage-panel {
-    margin-top: 8px;
+    margin-top: 18px;
   }
   .pending-operation {
     flex-direction: column;
@@ -1132,7 +1211,8 @@ button:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .document-list li {
+  .document-list li,
+  .detail-button {
     transition: none;
   }
 }
