@@ -194,8 +194,8 @@ onMounted(loadFeaturedApps)
 
 <template>
   <main class="home-page">
-    <section class="hero-section" aria-labelledby="home-title">
-      <HomeAtmosphere />
+    <section class="hero-section" :class="{ 'is-creating': creating }" aria-labelledby="home-title">
+      <HomeAtmosphere :active="creating" />
       <div class="hero-inner">
         <h1 id="home-title" class="hero-title">把想法，变成应用</h1>
         <p class="hero-subtitle">描述你想做什么，剩下的交给 AI。预览、修改，一步步完成你的作品。</p>
